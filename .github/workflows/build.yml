@@ -17,6 +17,21 @@ concurrency:
 name: Build Artifacts
 jobs:
   build:
+    strategy:
+      matrix:
+        include:
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+          - goos: windows
+            goarch: arm64
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -37,64 +52,74 @@ jobs:
         SHORT_SHA="$(git rev-parse --short HEAD)"
         VERSION="0.0.0-${SHORT_SHA}"
         echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-        echo "Building version: ${VERSION}"
 
-    - name: Build all platforms
+    - name: Build
       env:
         VERSION: ${{ steps.version.outputs.version }}
         CGO_ENABLED: "0"
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
       run: |
-        NAME="dsc_databricks"
-        DIST="dist"
-        mkdir -p "${DIST}"
+        BINARY="dsc-databricks"
+        if [ "${GOOS}" = "windows" ]; then
+          BINARY="dsc-databricks.exe"
+        fi
 
-        platforms=(
-          "darwin/amd64"
-          "darwin/arm64"
-          "linux/amd64"
-          "linux/arm64"
-          "windows/amd64"
-          "windows/arm64"
-        )
+        go build -trimpath -ldflags="-s -w" -o "${BINARY}" ./cmd
 
-        for platform in "${platforms[@]}"; do
-          GOOS="${platform%/*}"
-          GOARCH="${platform#*/}"
+        ARCHIVE_BASE="dsc_databricks_${VERSION}_${GOOS}_${GOARCH}"
 
-          BINARY="dsc-databricks"
-          if [ "${GOOS}" = "windows" ]; then
-            BINARY="dsc-databricks.exe"
-          fi
+        tar -czf "${ARCHIVE_BASE}.tar.gz" "${BINARY}"
+        zip -q "${ARCHIVE_BASE}.zip" "${BINARY}"
 
-          echo "::group::Building ${GOOS}/${GOARCH}"
-          GOOS="${GOOS}" GOARCH="${GOARCH}" go build \
-            -trimpath \
-            -ldflags="-s -w" \
-            -o "${BINARY}" \
-            ./cmd
-          echo "::endgroup::"
+    - name: Upload tar.gz
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: dsc_databricks_${{ steps.version.outputs.version }}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz
+        path: dsc_databricks_${{ steps.version.outputs.version }}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz
+        retention-days: 7
 
-          ARCHIVE_BASE="${NAME}_${VERSION}_${GOOS}_${GOARCH}"
+    - name: Upload zip
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: dsc_databricks_${{ steps.version.outputs.version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
+        path: dsc_databricks_${{ steps.version.outputs.version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
+        retention-days: 7
 
-          # Create tar.gz
-          tar -czf "${DIST}/${ARCHIVE_BASE}.tar.gz" "${BINARY}"
+  checksums:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      with:
+        path: artifacts
 
-          # Create zip
-          zip -q "${DIST}/${ARCHIVE_BASE}.zip" "${BINARY}"
-
-          rm -f "${BINARY}"
-        done
+    - name: Determine version
+      id: version
+      run: |
+        # Extract version from any artifact name
+        FIRST=$(ls artifacts/ | head -n1)
+        VERSION=$(echo "${FIRST}" | sed 's/dsc_databricks_\(.*\)_.*/\1/')
+        echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
     - name: Generate checksums
       env:
         VERSION: ${{ steps.version.outputs.version }}
       run: |
+        mkdir -p dist
+        # Each artifact is in its own directory; collect the files
+        for dir in artifacts/*/; do
+          cp "${dir}"* dist/
+        done
         cd dist
         sha256sum * > "dsc_databricks_${VERSION}_SHA256SUMS"
 
-    - name: Upload artifacts
+    - name: Upload checksums
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       with:
-        name: dsc-databricks-${{ steps.version.outputs.version }}
-        path: dist/
+        name: dsc_databricks_${{ steps.version.outputs.version }}_SHA256SUMS
+        path: dist/dsc_databricks_${{ steps.version.outputs.version }}_SHA256SUMS
         retention-days: 7
