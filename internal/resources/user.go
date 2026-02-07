@@ -29,19 +29,33 @@ var userPropertyDescriptions = dsc.PropertyDescriptions{
 	"name":         "The name of the user (given name and family name).",
 }
 
+// UserComplexValue represents a SCIM complex value (used for emails, entitlements, roles).
+type UserComplexValue struct {
+	Value   string `json:"value"`
+	Display string `json:"display,omitempty"`
+	Type    string `json:"type,omitempty"`
+	Primary bool   `json:"primary,omitempty"`
+}
+
 type UserSchemaInput struct {
-	ID          string `json:"id,omitempty"`
-	UserName    string `json:"user_name"`
-	DisplayName string `json:"display_name,omitempty"`
-	Active      bool   `json:"active,omitempty"`
+	ID           string             `json:"id,omitempty"`
+	UserName     string             `json:"user_name"`
+	DisplayName  string             `json:"display_name,omitempty"`
+	Emails       []UserComplexValue `json:"emails,omitempty"`
+	Entitlements []UserComplexValue `json:"entitlements,omitempty"`
+	Roles        []UserComplexValue `json:"roles,omitempty"`
+	Active       bool               `json:"active,omitempty"`
 }
 
 func (u UserSchemaInput) toCreateRequest() iam.CreateUserRequest {
 	return iam.CreateUserRequest{
-		Id:          u.ID,
-		UserName:    u.UserName,
-		DisplayName: u.DisplayName,
-		Active:      u.Active,
+		Id:           u.ID,
+		UserName:     u.UserName,
+		DisplayName:  u.DisplayName,
+		Active:       u.Active,
+		Emails:       toIamComplexValues(u.Emails),
+		Entitlements: toIamComplexValues(u.Entitlements),
+		Roles:        toIamComplexValues(u.Roles),
 	}
 }
 
@@ -54,16 +68,59 @@ func userMetadata() dsc.ResourceMetadata {
 		Tags:              []string{"databricks", "user", "iam", "workspace"},
 		Descriptions:      userPropertyDescriptions,
 		SchemaType:        reflect.TypeFor[UserSchemaInput](),
+		SchemaOverrides:   userSchemaOverrides,
 	})
+}
+
+// userSchemaOverrides adds enum constraints to the generated schema.
+func userSchemaOverrides(schema map[string]any) {
+	props, ok := schema["properties"].(map[string]any)
+	if !ok {
+		return
+	}
+
+	// Add enum to entitlements items value field.
+	entitlementEnum := []string{
+		"workspace-consume",
+		"workspace-access",
+		"databricks-sql-access",
+		"allow-cluster-create",
+		"allow-instance-pool-create",
+	}
+	setNestedEnum(props, "entitlements", "value", entitlementEnum)
+}
+
+// setNestedEnum sets an enum constraint on a value property inside an array-of-objects schema property.
+func setNestedEnum(props map[string]any, arrayProp, fieldName string, enumValues []string) {
+	arraySchema, ok := props[arrayProp].(map[string]any)
+	if !ok {
+		return
+	}
+	items, ok := arraySchema["items"].(map[string]any)
+	if !ok {
+		return
+	}
+	itemProps, ok := items["properties"].(map[string]any)
+	if !ok {
+		return
+	}
+	fieldSchema, ok := itemProps[fieldName].(map[string]any)
+	if !ok {
+		return
+	}
+	fieldSchema["enum"] = enumValues
 }
 
 // UserState represents the state of a Databricks user.
 type UserState struct {
-	ID          string `json:"id,omitempty"`
-	UserName    string `json:"user_name"`
-	DisplayName string `json:"display_name,omitempty"`
-	Active      bool   `json:"active"`
-	Exist       bool   `json:"_exist"`
+	ID           string             `json:"id,omitempty"`
+	UserName     string             `json:"user_name"`
+	DisplayName  string             `json:"display_name,omitempty"`
+	Emails       []UserComplexValue `json:"emails,omitempty"`
+	Entitlements []UserComplexValue `json:"entitlements,omitempty"`
+	Roles        []UserComplexValue `json:"roles,omitempty"`
+	Active       bool               `json:"active"`
+	Exist        bool               `json:"_exist"`
 }
 
 // UserHandler handles User resource operations.
@@ -137,6 +194,15 @@ func (h *UserHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.
 			fullUser.DisplayName = schemaInput.DisplayName
 		}
 		fullUser.Active = schemaInput.Active
+		if len(schemaInput.Emails) > 0 {
+			fullUser.Emails = toIamComplexValues(schemaInput.Emails)
+		}
+		if len(schemaInput.Entitlements) > 0 {
+			fullUser.Entitlements = toIamComplexValues(schemaInput.Entitlements)
+		}
+		if len(schemaInput.Roles) > 0 {
+			fullUser.Roles = toIamComplexValues(schemaInput.Roles)
+		}
 		updateReq := userToUpdateRequest(fullUser)
 		if err := w.UsersV2.Update(cmdCtx, updateReq); err != nil {
 			return nil, fmt.Errorf("failed to update user: %w", err)
@@ -173,11 +239,14 @@ func (h *UserHandler) Test(ctx dsc.ResourceContext, input json.RawMessage) (*dsc
 	}
 
 	desiredState := UserState{
-		ID:          schemaInput.ID,
-		UserName:    schemaInput.UserName,
-		DisplayName: schemaInput.DisplayName,
-		Active:      schemaInput.Active,
-		Exist:       true,
+		ID:           schemaInput.ID,
+		UserName:     schemaInput.UserName,
+		DisplayName:  schemaInput.DisplayName,
+		Active:       schemaInput.Active,
+		Emails:       schemaInput.Emails,
+		Entitlements: schemaInput.Entitlements,
+		Roles:        schemaInput.Roles,
+		Exist:        true,
 	}
 
 	differing := dsc.CompareStates(desiredState, actualState)
@@ -243,12 +312,49 @@ func (h *UserHandler) Export(ctx dsc.ResourceContext) ([]any, error) {
 
 func userToState(user *iam.User) UserState {
 	return UserState{
-		ID:          user.Id,
-		UserName:    user.UserName,
-		DisplayName: user.DisplayName,
-		Active:      user.Active,
-		Exist:       true,
+		ID:           user.Id,
+		UserName:     user.UserName,
+		DisplayName:  user.DisplayName,
+		Active:       user.Active,
+		Emails:       fromIamComplexValues(user.Emails),
+		Entitlements: fromIamComplexValues(user.Entitlements),
+		Roles:        fromIamComplexValues(user.Roles),
+		Exist:        true,
 	}
+}
+
+// toIamComplexValues converts UserComplexValue slices to iam.ComplexValue slices.
+func toIamComplexValues(vals []UserComplexValue) []iam.ComplexValue {
+	if len(vals) == 0 {
+		return nil
+	}
+	out := make([]iam.ComplexValue, len(vals))
+	for i, v := range vals {
+		out[i] = iam.ComplexValue{
+			Value:   v.Value,
+			Display: v.Display,
+			Type:    v.Type,
+			Primary: v.Primary,
+		}
+	}
+	return out
+}
+
+// fromIamComplexValues converts iam.ComplexValue slices to UserComplexValue slices.
+func fromIamComplexValues(vals []iam.ComplexValue) []UserComplexValue {
+	if len(vals) == 0 {
+		return nil
+	}
+	out := make([]UserComplexValue, len(vals))
+	for i, v := range vals {
+		out[i] = UserComplexValue{
+			Value:   v.Value,
+			Display: v.Display,
+			Type:    v.Type,
+			Primary: v.Primary,
+		}
+	}
+	return out
 }
 
 // userToUpdateRequest converts a full iam.User (from Get) to an UpdateUserRequest for PUT.

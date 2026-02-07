@@ -69,6 +69,27 @@ Describe 'Databricks User Resource' -Tag 'Databricks', 'User' -Skip:(!$script:da
             $result.properties._exist.type | Should -Be 'boolean'
             $result.properties._exist.default | Should -Be $true
         }
+
+        It 'should include emails, entitlements, and roles properties' {
+            $result = dsc resource schema -r LibreDsc.Databricks/User | ConvertFrom-Json
+            $result.properties.emails | Should -Not -BeNullOrEmpty
+            $result.properties.emails.type | Should -Be 'array'
+            $result.properties.entitlements | Should -Not -BeNullOrEmpty
+            $result.properties.entitlements.type | Should -Be 'array'
+            $result.properties.roles | Should -Not -BeNullOrEmpty
+            $result.properties.roles.type | Should -Be 'array'
+        }
+
+        It 'should have enum values on entitlements value field' {
+            $result = dsc resource schema -r LibreDsc.Databricks/User | ConvertFrom-Json
+            $enum = $result.properties.entitlements.items.properties.value.enum
+            $enum | Should -Not -BeNullOrEmpty
+            $enum | Should -Contain 'workspace-access'
+            $enum | Should -Contain 'databricks-sql-access'
+            $enum | Should -Contain 'allow-cluster-create'
+            $enum | Should -Contain 'allow-instance-pool-create'
+            $enum | Should -Contain 'workspace-consume'
+        }
     }
 
     Context 'Get Operation' -Tag 'Get' {
@@ -99,6 +120,59 @@ Describe 'Databricks User Resource' -Tag 'Databricks', 'User' -Skip:(!$script:da
             $result.actualState._exist | Should -Be $true
             $result.actualState.user_name | Should -Be $script:testUserName
             $result.actualState.display_name | Should -Be $script:testDisplayName
+        }
+    }
+
+    Context 'Set Operation - Update Entitlements and Emails' -Tag 'Set' {
+        BeforeAll {
+            $script:entitlementUser = New-TestUserName
+            $inputJson = @{
+                user_name    = $script:entitlementUser
+                display_name = 'Entitlement Test'
+                active       = $true
+            } | ConvertTo-Json -Compress
+            dsc resource set -r LibreDsc.Databricks/User --input $inputJson | Out-Null
+        }
+
+        AfterAll {
+            if ($script:entitlementUser)
+            {
+                try
+                {
+                    $inputJson = @{ user_name = $script:entitlementUser } | ConvertTo-Json -Compress
+                    dsc resource delete -r LibreDsc.Databricks/User --input $inputJson 2>$null | Out-Null
+                }
+                catch { }
+            }
+        }
+
+        It 'should set entitlements and emails on the user' {
+            $inputJson = @{
+                user_name    = $script:entitlementUser
+                display_name = 'Entitlement Test'
+                active       = $true
+                entitlements = @(
+                    @{ value = 'allow-cluster-create' }
+                )
+                emails       = @(
+                    @{ value = $script:entitlementUser; type = 'work'; primary = $true }
+                )
+            } | ConvertTo-Json -Compress -Depth 5
+
+            $result = dsc resource set -r LibreDsc.Databricks/User --input $inputJson | ConvertFrom-Json
+            $LASTEXITCODE | Should -Be 0
+            $result.afterState._exist | Should -Be $true
+            $result.afterState.user_name | Should -Be $script:entitlementUser
+        }
+
+        It 'should verify entitlements and emails via get' {
+            $inputJson = @{ user_name = $script:entitlementUser } | ConvertTo-Json -Compress
+            $result = dsc resource get -r LibreDsc.Databricks/User --input $inputJson | ConvertFrom-Json
+            $result.actualState._exist | Should -Be $true
+            $result.actualState.entitlements | Should -Not -BeNullOrEmpty
+            ($result.actualState.entitlements | Where-Object { $_.value -eq 'allow-cluster-create' }) | Should -Not -BeNullOrEmpty
+            $result.actualState.emails | Should -Not -BeNullOrEmpty
+            ($result.actualState.emails | Where-Object { $_.value -eq $script:entitlementUser }) | Should -Not -BeNullOrEmpty
         }
     }
 

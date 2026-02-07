@@ -49,6 +49,7 @@ type PropertyDescriptions map[string]string
 type MetadataConfig struct {
 	Descriptions      PropertyDescriptions
 	SchemaType        reflect.Type
+	SchemaOverrides   func(schema map[string]any)
 	ResourceType      string
 	Version           string
 	Description       string
@@ -77,6 +78,12 @@ func BuildMetadata(cfg MetadataConfig) ResourceMetadata {
 		SchemaDescription: cfg.SchemaDescription,
 		ResourceName:      cfg.ResourceName,
 	})
+
+	if cfg.SchemaOverrides != nil {
+		if schemaMap, ok := schema.(map[string]any); ok {
+			cfg.SchemaOverrides(schemaMap)
+		}
+	}
 
 	version := cfg.Version
 	if version == "" {
