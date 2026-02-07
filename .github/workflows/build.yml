@@ -72,54 +72,11 @@ jobs:
         tar -czf "${ARCHIVE_BASE}.tar.gz" "${BINARY}"
         zip -q "${ARCHIVE_BASE}.zip" "${BINARY}"
 
-    - name: Upload tar.gz
+    - name: Upload archives
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       with:
-        name: dsc_databricks_${{ steps.version.outputs.version }}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz
-        path: dsc_databricks_${{ steps.version.outputs.version }}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz
-        retention-days: 7
-
-    - name: Upload zip
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-      with:
-        name: dsc_databricks_${{ steps.version.outputs.version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
-        path: dsc_databricks_${{ steps.version.outputs.version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
-        retention-days: 7
-
-  checksums:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-    - name: Download all artifacts
-      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-      with:
-        path: artifacts
-
-    - name: Determine version
-      id: version
-      run: |
-        # Extract version from any artifact name
-        FIRST=$(ls artifacts/ | head -n1)
-        VERSION=$(echo "${FIRST}" | sed 's/dsc_databricks_\(.*\)_.*/\1/')
-        echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-
-    - name: Generate checksums
-      env:
-        VERSION: ${{ steps.version.outputs.version }}
-      run: |
-        mkdir -p dist
-        # Each artifact is in its own directory; collect the files
-        for dir in artifacts/*/; do
-          cp "${dir}"* dist/
-        done
-        cd dist
-        sha256sum * > "dsc_databricks_${VERSION}_SHA256SUMS"
-
-    - name: Upload checksums
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-      with:
-        name: dsc_databricks_${{ steps.version.outputs.version }}_SHA256SUMS
-        path: dist/dsc_databricks_${{ steps.version.outputs.version }}_SHA256SUMS
+        name: dsc_databricks_${{ steps.version.outputs.version }}_${{ matrix.goos }}_${{ matrix.goarch }}
+        path: |
+          dsc_databricks_${{ steps.version.outputs.version }}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz
+          dsc_databricks_${{ steps.version.outputs.version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
         retention-days: 7
