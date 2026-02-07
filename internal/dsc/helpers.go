@@ -47,14 +47,14 @@ type PropertyDescriptions map[string]string
 
 // MetadataConfig contains configuration for building resource metadata.
 type MetadataConfig struct {
+	Descriptions      PropertyDescriptions
+	SchemaType        reflect.Type
 	ResourceType      string
 	Version           string
 	Description       string
 	SchemaDescription string
 	ResourceName      string
 	Tags              []string
-	Descriptions      PropertyDescriptions
-	SchemaType        reflect.Type
 }
 
 // DefaultExitCodes returns the standard exit codes for DSC resources.

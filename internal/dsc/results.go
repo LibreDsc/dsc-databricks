@@ -26,9 +26,9 @@ type TestResult struct {
 	// ActualState is the current actual state of the resource.
 	ActualState any `json:"actualState"`
 
-	// InDesiredState indicates whether the resource is in the desired state.
-	InDesiredState bool `json:"inDesiredState"`
-
 	// DifferingProperties lists the property names that differ between desired and actual state.
 	DifferingProperties []string `json:"differingProperties,omitempty"`
+
+	// InDesiredState indicates whether the resource is in the desired state.
+	InDesiredState bool `json:"inDesiredState"`
 }

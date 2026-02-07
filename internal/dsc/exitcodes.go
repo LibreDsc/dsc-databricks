@@ -30,8 +30,8 @@ const (
 
 // ExitCodeMapping maps a description and optional error type to an exit code.
 type ExitCodeMapping struct {
-	Code        ExitCode
 	Description string
+	Code        ExitCode
 }
 
 // DefaultExitCodeMappings returns the standard exit code mappings for DSC resources.
@@ -49,8 +49,8 @@ func DefaultExitCodeMappings() []ExitCodeMapping {
 
 // ExitCodeError wraps an error with a specific exit code for CLI return.
 type ExitCodeError struct {
-	Code ExitCode
 	Err  error
+	Code ExitCode
 }
 
 func (e *ExitCodeError) Error() string {

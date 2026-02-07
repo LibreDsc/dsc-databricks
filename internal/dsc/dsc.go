@@ -69,12 +69,12 @@ type ResourceHandler interface {
 
 // ResourceMetadata contains metadata for resources.
 type ResourceMetadata struct {
+	ExitCodes   map[string]string `json:"exitCodes"`
+	Schema      ResourceSchema    `json:"schema"`
 	Type        string            `json:"type"`
 	Version     string            `json:"version"`
 	Description string            `json:"description"`
 	Tags        []string          `json:"tags"`
-	ExitCodes   map[string]string `json:"exitCodes"`
-	Schema      ResourceSchema    `json:"schema"`
 }
 
 // ResourceSchema represents the embedded schema.
@@ -84,11 +84,6 @@ type ResourceSchema struct {
 
 // ResourceManifest represents the resource manifest structure.
 type ResourceManifest struct {
-	Schema      string            `json:"$schema"`
-	Type        string            `json:"type"`
-	Version     string            `json:"version"`
-	Description string            `json:"description"`
-	Tags        []string          `json:"tags"`
 	ExitCodes   map[string]string `json:"exitCodes"`
 	Schema_     ResourceSchema    `json:"schema"`
 	Get         *CommandSpec      `json:"get,omitempty"`
@@ -96,6 +91,11 @@ type ResourceManifest struct {
 	Test        *TestCommandSpec  `json:"test,omitempty"`
 	Delete      *CommandSpec      `json:"delete,omitempty"`
 	Export      *ExportSpec       `json:"export,omitempty"`
+	Schema      string            `json:"$schema"`
+	Type        string            `json:"type"`
+	Version     string            `json:"version"`
+	Description string            `json:"description"`
+	Tags        []string          `json:"tags"`
 }
 
 // CommandSpec defines a command specification in the manifest.
@@ -107,15 +107,15 @@ type CommandSpec struct {
 // SetCommandSpec defines the Set command specification with return type.
 type SetCommandSpec struct {
 	Executable string `json:"executable"`
-	Args       []any  `json:"args"`
 	Return     string `json:"return,omitempty"`
+	Args       []any  `json:"args"`
 }
 
 // TestCommandSpec defines the Test command specification with return type.
 type TestCommandSpec struct {
 	Executable string `json:"executable"`
-	Args       []any  `json:"args"`
 	Return     string `json:"return,omitempty"`
+	Args       []any  `json:"args"`
 }
 
 // ExportSpec defines the Export command specification.
