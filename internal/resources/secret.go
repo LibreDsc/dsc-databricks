@@ -43,7 +43,7 @@ func secretMetadata() dsc.ResourceMetadata {
 		ResourceName:      "secret",
 		Tags:              []string{"databricks", "secret", "workspace"},
 		Descriptions:      secretPropertyDescriptions,
-		SchemaType:        reflect.TypeOf(workspace.PutSecret{}),
+		SchemaType:        reflect.TypeFor[workspace.PutSecret](),
 	})
 }
 
@@ -63,7 +63,7 @@ func secretScopeMetadata() dsc.ResourceMetadata {
 		ResourceName:      "secret scope",
 		Tags:              []string{"databricks", "secret", "scope", "workspace"},
 		Descriptions:      secretScopePropertyDescriptions,
-		SchemaType:        reflect.TypeOf(SecretScopeSchemaInput{}),
+		SchemaType:        reflect.TypeFor[SecretScopeSchemaInput](),
 	})
 }
 
@@ -84,7 +84,7 @@ func secretAclMetadata() dsc.ResourceMetadata {
 		ResourceName:      "secret ACL",
 		Tags:              []string{"databricks", "secret", "acl", "permissions", "workspace"},
 		Descriptions:      secretAclPropertyDescriptions,
-		SchemaType:        reflect.TypeOf(SecretAclSchemaInput{}),
+		SchemaType:        reflect.TypeFor[SecretAclSchemaInput](),
 	})
 }
 

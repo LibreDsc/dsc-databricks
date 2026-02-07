@@ -53,7 +53,7 @@ func userMetadata() dsc.ResourceMetadata {
 		ResourceName:      "user",
 		Tags:              []string{"databricks", "user", "iam", "workspace"},
 		Descriptions:      userPropertyDescriptions,
-		SchemaType:        reflect.TypeOf(UserSchemaInput{}),
+		SchemaType:        reflect.TypeFor[UserSchemaInput](),
 	})
 }
 
