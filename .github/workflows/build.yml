@@ -1,0 +1,100 @@
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'README.md'
+      - 'CONTRIBUTING.md'
+      - 'LICENSE'
+      - '.github/*.md'
+      - '.github/FUNDING.yml'
+      - 'tests/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+name: Build Artifacts
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      with:
+        fetch-depth: 0
+
+    - name: Install Go
+      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+      with:
+        go-version-file: go.mod
+
+    - name: Determine version
+      id: version
+      run: |
+        SHORT_SHA="$(git rev-parse --short HEAD)"
+        VERSION="0.0.0-${SHORT_SHA}"
+        echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+        echo "Building version: ${VERSION}"
+
+    - name: Build all platforms
+      env:
+        VERSION: ${{ steps.version.outputs.version }}
+        CGO_ENABLED: "0"
+      run: |
+        NAME="dsc_databricks"
+        DIST="dist"
+        mkdir -p "${DIST}"
+
+        platforms=(
+          "darwin/amd64"
+          "darwin/arm64"
+          "linux/amd64"
+          "linux/arm64"
+          "windows/amd64"
+          "windows/arm64"
+        )
+
+        for platform in "${platforms[@]}"; do
+          GOOS="${platform%/*}"
+          GOARCH="${platform#*/}"
+
+          BINARY="dsc-databricks"
+          if [ "${GOOS}" = "windows" ]; then
+            BINARY="dsc-databricks.exe"
+          fi
+
+          echo "::group::Building ${GOOS}/${GOARCH}"
+          GOOS="${GOOS}" GOARCH="${GOARCH}" go build \
+            -trimpath \
+            -ldflags="-s -w" \
+            -o "${BINARY}" \
+            ./cmd
+          echo "::endgroup::"
+
+          ARCHIVE_BASE="${NAME}_${VERSION}_${GOOS}_${GOARCH}"
+
+          # Create tar.gz
+          tar -czf "${DIST}/${ARCHIVE_BASE}.tar.gz" "${BINARY}"
+
+          # Create zip
+          zip -q "${DIST}/${ARCHIVE_BASE}.zip" "${BINARY}"
+
+          rm -f "${BINARY}"
+        done
+
+    - name: Generate checksums
+      env:
+        VERSION: ${{ steps.version.outputs.version }}
+      run: |
+        cd dist
+        sha256sum * > "dsc_databricks_${VERSION}_SHA256SUMS"
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: dsc-databricks-${{ steps.version.outputs.version }}
+        path: dist/
+        retention-days: 7
