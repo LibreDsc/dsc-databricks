@@ -47,6 +47,14 @@ func secretMetadata() dsc.ResourceMetadata {
 	})
 }
 
+// SecretScopeSchemaInput is used for JSON schema generation only.
+// Unlike workspace.CreateScope which uses scope_backend_type, we expose
+// backend_type to match the state output and keep the schema consistent.
+type SecretScopeSchemaInput struct {
+	Scope       string `json:"scope"`
+	BackendType string `json:"backend_type,omitempty"`
+}
+
 func secretScopeMetadata() dsc.ResourceMetadata {
 	return dsc.BuildMetadata(dsc.MetadataConfig{
 		ResourceType:      "LibreDsc.Databricks/SecretScope",
@@ -55,8 +63,17 @@ func secretScopeMetadata() dsc.ResourceMetadata {
 		ResourceName:      "secret scope",
 		Tags:              []string{"databricks", "secret", "scope", "workspace"},
 		Descriptions:      secretScopePropertyDescriptions,
-		SchemaType:        reflect.TypeOf(workspace.CreateScope{}),
+		SchemaType:        reflect.TypeOf(SecretScopeSchemaInput{}),
 	})
+}
+
+// SecretAclSchemaInput is used for JSON schema generation only.
+// Unlike workspace.PutAcl, permission is optional here because get and delete
+// operations only require scope and principal.
+type SecretAclSchemaInput struct {
+	Permission string `json:"permission,omitempty"`
+	Principal  string `json:"principal"`
+	Scope      string `json:"scope"`
 }
 
 func secretAclMetadata() dsc.ResourceMetadata {
@@ -67,7 +84,7 @@ func secretAclMetadata() dsc.ResourceMetadata {
 		ResourceName:      "secret ACL",
 		Tags:              []string{"databricks", "secret", "acl", "permissions", "workspace"},
 		Descriptions:      secretAclPropertyDescriptions,
-		SchemaType:        reflect.TypeOf(workspace.PutAcl{}),
+		SchemaType:        reflect.TypeOf(SecretAclSchemaInput{}),
 	})
 }
 
@@ -323,7 +340,7 @@ func (h *SecretScopeHandler) Set(ctx dsc.ResourceContext, input json.RawMessage)
 }
 
 func (h *SecretScopeHandler) Test(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.TestResult, error) {
-	req, err := dsc.UnmarshalInput[workspace.CreateScope](input)
+	req, err := dsc.UnmarshalInput[SecretScopeState](input)
 	if err != nil {
 		return nil, err
 	}
@@ -334,7 +351,7 @@ func (h *SecretScopeHandler) Test(ctx dsc.ResourceContext, input json.RawMessage
 	}
 
 	actualState := result.ActualState
-	desiredState := SecretScopeState{Scope: req.Scope, Exist: true}
+	desiredState := SecretScopeState{Scope: req.Scope, BackendType: req.BackendType, Exist: true}
 
 	differing := dsc.CompareStates(desiredState, actualState)
 	inDesiredState := len(differing) == 0
@@ -400,7 +417,7 @@ type SecretAclState struct {
 type SecretAclHandler struct{}
 
 func (h *SecretAclHandler) Get(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.GetResult, error) {
-	req, err := dsc.UnmarshalInput[workspace.GetAclRequest](input)
+	req, err := dsc.UnmarshalInput[workspace.PutAcl](input)
 	if err != nil {
 		return nil, err
 	}
@@ -416,7 +433,7 @@ func (h *SecretAclHandler) Get(ctx dsc.ResourceContext, input json.RawMessage) (
 		return nil, err
 	}
 
-	acl, err := w.Secrets.GetAcl(cmdCtx, req)
+	acl, err := w.Secrets.GetAcl(cmdCtx, workspace.GetAclRequest{Scope: req.Scope, Principal: req.Principal})
 	if err != nil {
 		return &dsc.GetResult{ActualState: SecretAclState{
 			Scope:     req.Scope,
@@ -446,7 +463,7 @@ func (h *SecretAclHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (
 		return nil, err
 	}
 
-	getInput, _ := json.Marshal(workspace.GetAclRequest{Scope: req.Scope, Principal: req.Principal})
+	getInput, _ := json.Marshal(map[string]string{"scope": req.Scope, "principal": req.Principal})
 	beforeResult, _ := h.Get(ctx, getInput)
 	var beforeState SecretAclState
 	if beforeResult != nil {
@@ -487,7 +504,7 @@ func (h *SecretAclHandler) Test(ctx dsc.ResourceContext, input json.RawMessage) 
 		return nil, err
 	}
 
-	getInput, _ := json.Marshal(workspace.GetAclRequest{Scope: req.Scope, Principal: req.Principal})
+	getInput, _ := json.Marshal(map[string]string{"scope": req.Scope, "principal": req.Principal})
 	result, err := h.Get(ctx, getInput)
 	if err != nil {
 		return nil, err
@@ -513,7 +530,7 @@ func (h *SecretAclHandler) Test(ctx dsc.ResourceContext, input json.RawMessage) 
 }
 
 func (h *SecretAclHandler) Delete(ctx dsc.ResourceContext, input json.RawMessage) error {
-	req, err := dsc.UnmarshalInput[workspace.DeleteAcl](input)
+	req, err := dsc.UnmarshalInput[workspace.PutAcl](input)
 	if err != nil {
 		return err
 	}
@@ -529,7 +546,7 @@ func (h *SecretAclHandler) Delete(ctx dsc.ResourceContext, input json.RawMessage
 		return err
 	}
 
-	return w.Secrets.DeleteAcl(cmdCtx, req)
+	return w.Secrets.DeleteAcl(cmdCtx, workspace.DeleteAcl{Scope: req.Scope, Principal: req.Principal})
 }
 
 func (h *SecretAclHandler) Export(ctx dsc.ResourceContext) ([]any, error) {

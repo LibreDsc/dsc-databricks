@@ -3,6 +3,7 @@ package dsc
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"reflect"
 )
 
@@ -99,14 +100,29 @@ func NotFoundError(resourceType string, identifiers ...string) error {
 	return fmt.Errorf("%s not found: %v", resourceType, identifiers)
 }
 
-// renderJSON marshals a value to JSON and prints it to the command output.
-func renderJSON(ctx ResourceContext, v any) error {
+// renderJSON marshals a value to JSON and writes it to stdout.
+func renderJSON(_ ResourceContext, v any) error {
 	data, err := json.Marshal(v)
 	if err != nil {
 		return fmt.Errorf("failed to marshal output: %w", err)
 	}
-	ctx.Cmd.Println(string(data))
+	fmt.Fprintln(os.Stdout, string(data))
 	return nil
+}
+
+// withInDesiredState merges the _inDesiredState canonical property into a state object.
+// DSC v3 expects the test output to include _inDesiredState in the actual state JSON.
+func withInDesiredState(state any, inDesiredState bool) (map[string]any, error) {
+	data, err := json.Marshal(state)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal state: %w", err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal state: %w", err)
+	}
+	m["_inDesiredState"] = inDesiredState
+	return m, nil
 }
 
 // CompareStates compares two states (as JSON-serializable structs) and returns

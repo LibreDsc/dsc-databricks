@@ -107,7 +107,7 @@ func newGetCmd() *cobra.Command {
 				return err
 			}
 
-			return renderJSON(ctx, result)
+			return renderJSON(ctx, result.ActualState)
 		},
 	}
 
@@ -149,7 +149,17 @@ func newSetCmd() *cobra.Command {
 			}
 
 			if result != nil {
-				return renderJSON(ctx, result)
+				// DSC with stateAndDiff expects two JSON lines on stdout:
+				// Line 1: after state (resource instance)
+				// Line 2: changed properties array
+				if err := renderJSON(ctx, result.AfterState); err != nil {
+					return err
+				}
+				changedProps := result.ChangedProperties
+				if changedProps == nil {
+					changedProps = []string{}
+				}
+				return renderJSON(ctx, changedProps)
 			}
 			return nil
 		},
@@ -231,7 +241,21 @@ func newTestCmd() *cobra.Command {
 				return err
 			}
 
-			return renderJSON(ctx, result)
+			// DSC with stateAndDiff expects two JSON lines on stdout:
+			// Line 1: actual state with _inDesiredState property
+			// Line 2: differing properties array
+			stateWithDesired, err := withInDesiredState(result.ActualState, result.InDesiredState)
+			if err != nil {
+				return err
+			}
+			if err := renderJSON(ctx, stateWithDesired); err != nil {
+				return err
+			}
+			diffProps := result.DifferingProperties
+			if diffProps == nil {
+				diffProps = []string{}
+			}
+			return renderJSON(ctx, diffProps)
 		},
 	}
 
@@ -266,7 +290,14 @@ func newExportCmd() *cobra.Command {
 				return err
 			}
 
-			return renderJSON(ctx, result)
+			// DSC expects one JSON object per line; it wraps each into
+			// {"type": ..., "properties": ...} for the export result.
+			for _, item := range result {
+				if err := renderJSON(ctx, item); err != nil {
+					return err
+				}
+			}
+			return nil
 		},
 	}
 

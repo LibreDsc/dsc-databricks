@@ -1,3 +1,6 @@
+# Build output
+output/
+
 # Binaries
 *.exe
 *.exe~

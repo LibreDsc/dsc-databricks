@@ -29,6 +29,22 @@ var userPropertyDescriptions = dsc.PropertyDescriptions{
 	"name":         "The name of the user (given name and family name).",
 }
 
+type UserSchemaInput struct {
+	ID          string `json:"id,omitempty"`
+	UserName    string `json:"user_name"`
+	DisplayName string `json:"display_name,omitempty"`
+	Active      bool   `json:"active,omitempty"`
+}
+
+func (u UserSchemaInput) toIamUser() iam.User {
+	return iam.User{
+		Id:          u.ID,
+		UserName:    u.UserName,
+		DisplayName: u.DisplayName,
+		Active:      u.Active,
+	}
+}
+
 func userMetadata() dsc.ResourceMetadata {
 	return dsc.BuildMetadata(dsc.MetadataConfig{
 		ResourceType:      "LibreDsc.Databricks/User",
@@ -37,13 +53,13 @@ func userMetadata() dsc.ResourceMetadata {
 		ResourceName:      "user",
 		Tags:              []string{"databricks", "user", "iam", "workspace"},
 		Descriptions:      userPropertyDescriptions,
-		SchemaType:        reflect.TypeOf(iam.User{}),
+		SchemaType:        reflect.TypeOf(UserSchemaInput{}),
 	})
 }
 
 // UserState represents the state of a Databricks user.
 type UserState struct {
-	ID          string `json:"id"`
+	ID          string `json:"id,omitempty"`
 	UserName    string `json:"user_name"`
 	DisplayName string `json:"display_name,omitempty"`
 	Active      bool   `json:"active"`
@@ -54,12 +70,13 @@ type UserState struct {
 type UserHandler struct{}
 
 func (h *UserHandler) Get(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.GetResult, error) {
-	req, err := dsc.UnmarshalInput[iam.User](input)
+	req, err := dsc.UnmarshalInput[UserSchemaInput](input)
 	if err != nil {
 		return nil, err
 	}
 
-	state, err := h.getCurrentState(ctx, &req)
+	iamUser := req.toIamUser()
+	state, err := h.getCurrentState(ctx, &iamUser)
 	if err != nil {
 		return nil, err
 	}
@@ -98,11 +115,12 @@ func (h *UserHandler) getCurrentState(ctx dsc.ResourceContext, req *iam.User) (U
 }
 
 func (h *UserHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.SetResult, error) {
-	req, err := dsc.UnmarshalInput[iam.User](input)
+	schemaInput, err := dsc.UnmarshalInput[UserSchemaInput](input)
 	if err != nil {
 		return nil, err
 	}
 
+	req := schemaInput.toIamUser()
 	beforeState, _ := h.getCurrentState(ctx, &req)
 
 	cmdCtx, w, err := getWorkspaceClient(ctx)
@@ -110,25 +128,25 @@ func (h *UserHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.
 		return nil, err
 	}
 
-	if req.Id != "" {
-		if err := w.Users.Update(cmdCtx, req); err != nil {
-			return nil, err
+	if beforeState.Exist {
+		// User already exists — GET the full user, overlay desired fields, then PUT back.
+		// SCIM PUT requires the complete user representation including schemas, emails, etc.
+		fullUser, err := w.Users.GetById(cmdCtx, beforeState.ID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get user for update: %w", err)
 		}
+		if schemaInput.DisplayName != "" {
+			fullUser.DisplayName = schemaInput.DisplayName
+		}
+		fullUser.Active = schemaInput.Active
+		if err := w.Users.Update(cmdCtx, *fullUser); err != nil {
+			return nil, fmt.Errorf("failed to update user: %w", err)
+		}
+		req.Id = beforeState.ID
 	} else if req.UserName != "" {
-		users := w.Users.List(cmdCtx, iam.ListUsersRequest{
-			Filter: "userName eq \"" + req.UserName + "\"",
-		})
-
-		existingUser, err := users.Next(cmdCtx)
-		if err == nil && existingUser.Id != "" {
-			req.Id = existingUser.Id
-			if err := w.Users.Update(cmdCtx, req); err != nil {
-				return nil, err
-			}
-		} else {
-			if _, err := w.Users.Create(cmdCtx, req); err != nil {
-				return nil, err
-			}
+		// User doesn't exist — create it.
+		if _, err := w.Users.Create(cmdCtx, req); err != nil {
+			return nil, err
 		}
 	} else {
 		return nil, dsc.ValidateRequired(dsc.RequiredField{Name: "user_name", Value: ""})
@@ -145,18 +163,25 @@ func (h *UserHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.
 }
 
 func (h *UserHandler) Test(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.TestResult, error) {
-	req, err := dsc.UnmarshalInput[iam.User](input)
+	schemaInput, err := dsc.UnmarshalInput[UserSchemaInput](input)
 	if err != nil {
 		return nil, err
 	}
+
+	req := schemaInput.toIamUser()
 
 	actualState, err := h.getCurrentState(ctx, &req)
 	if err != nil {
 		return nil, err
 	}
 
-	desiredState := userToState(&req)
-	desiredState.Exist = true
+	desiredState := UserState{
+		ID:          schemaInput.ID,
+		UserName:    schemaInput.UserName,
+		DisplayName: schemaInput.DisplayName,
+		Active:      schemaInput.Active,
+		Exist:       true,
+	}
 
 	differing := dsc.CompareStates(desiredState, actualState)
 	inDesiredState := len(differing) == 0
@@ -170,10 +195,12 @@ func (h *UserHandler) Test(ctx dsc.ResourceContext, input json.RawMessage) (*dsc
 }
 
 func (h *UserHandler) Delete(ctx dsc.ResourceContext, input json.RawMessage) error {
-	req, err := dsc.UnmarshalInput[iam.User](input)
+	schemaInput, err := dsc.UnmarshalInput[UserSchemaInput](input)
 	if err != nil {
 		return err
 	}
+
+	req := schemaInput.toIamUser()
 
 	cmdCtx, w, err := getWorkspaceClient(ctx)
 	if err != nil {

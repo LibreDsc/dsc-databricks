@@ -545,24 +545,140 @@ dsc-databricks manifest --resource LibreDsc.Databricks/User
 
 ## Testing
 
-### E2E Test Pattern
+### E2E Tests (Pester)
 
-Tests should exercise the CLI through the DSC engine or directly:
+E2E tests live in `tests/` and use [Pester](https://pester.dev/) v5+. They validate every resource by calling the compiled CLI binary directly.
+
+#### Prerequisites
+
+- PowerShell 7+ with Pester v5 installed (`Install-Module Pester -Force`)
+- Built binary (`go build -o dsc-databricks.exe ./cmd`)
+- Environment variables for a live Databricks workspace:
+  - `DATABRICKS_HOST` — workspace URL (e.g., `https://adb-1234567890.12.azuredatabricks.net`)
+  - `DATABRICKS_TOKEN` — personal access token
+
+When either variable is missing the entire test suite is **skipped**, not failed.
+
+#### Running Tests
+
+```powershell
+# Run all E2E tests
+Invoke-Pester -Path ./tests -Output Detailed
+
+# Run a single resource
+Invoke-Pester -Path ./tests/User.Tests.ps1 -Output Detailed
+
+# Run by tag
+Invoke-Pester -Path ./tests -Tag 'SecretScope' -Output Detailed
+```
+
+#### File Layout
+
+| File | Purpose |
+|---|---|
+| `tests/helpers.ps1` | Shared functions: env-var gating, CLI invocation, unique name generators |
+| `tests/User.Tests.ps1` | User resource E2E tests |
+| `tests/SecretScope.Tests.ps1` | SecretScope resource E2E tests |
+| `tests/Secret.Tests.ps1` | Secret resource E2E tests |
+| `tests/SecretAcl.Tests.ps1` | SecretAcl resource E2E tests |
+
+#### Shared Helpers (`tests/helpers.ps1`)
+
+Every test file must dot-source helpers in **both** `BeforeDiscovery` and `BeforeAll`:
+
+```powershell
+BeforeDiscovery {
+    . (Join-Path (Split-Path $PSScriptRoot -Parent) 'tools' 'Initialize-DatabricksTests.ps1')
+    $script:databricksAvailable = Initialize-DatabricksTests -ExeName $ExeName
+}
+
+Describe 'Resource' -Skip:(!$script:databricksAvailable) {
+    BeforeAll {
+        . (Join-Path (Split-Path $PSScriptRoot -Parent) 'tools' 'Initialize-DatabricksTests.ps1')
+
+        $outputDir = Join-Path (Split-Path $PSScriptRoot -Parent) 'output'
+        if (Test-Path $outputDir) {
+            $env:DSC_RESOURCE_PATH = $outputDir
+        }
+        # setup code
+    }
+    # ...
+}
+```
+
+Key helper functions (in `tools/Initialize-DatabricksTests.ps1`):
+
+| Function | Purpose |
+|---|---|
+| `Initialize-DatabricksTests` | Returns `$false` when `DATABRICKS_HOST`, `DATABRICKS_TOKEN`, or the built binary is missing |
+| `New-TestScopeName` | Returns a unique scope name like `dsc-test-scope-<random>` |
+| `New-TestUserName` | Returns a unique user name like `dsc-test-<random>@example.com` |
+
+#### Test Structure (per resource)
+
+Follow this Context order inside each `Describe` block:
+
+1. **Discovery** — validate `dsc resource list` finds the resource and reports correct capabilities
+2. **Schema Validation** — validate `dsc resource schema` returns correct JSON Schema with `_exist` property
+3. **Get Operation** — verify `_exist=false` for a resource that does not exist
+4. **Set Operation – Create** — create the resource, verify `afterState._exist=true`, then confirm via a follow-up `get`
+5. **Set Operation – Update** — change a mutable property, verify the change persists
+6. **Test Operation** — assert `inDesiredState=true` when state matches, and `inDesiredState=false` with correct `differingProperties` when it does not
+7. **Export Operation** — verify the resource appears in the export list
+8. **Delete Operation** — delete the resource, verify `_exist=false`
+9. **Idempotency** — set the same desired state twice, confirm no errors and state unchanged
+
+#### Cleanup Rules
+
+- **`AfterAll`** at the `Describe` level must delete every resource the test created
+- Resources that depend on a scope (Secret, SecretAcl) should create a dedicated scope in `BeforeAll` and delete the scope in `AfterAll` (which cascades)
+- Wrap cleanup calls in `try/catch` so cleanup failures never mask test results
+- Use unique names (via helpers) to avoid collisions with parallel runs
+
+#### CLI Invocation Pattern
+
+All tests invoke the DSC v3 CLI (`dsc`) directly. The `$env:DSC_RESOURCE_PATH` must point to the `output/` directory so `dsc` can discover the resource manifests.
 
 ```powershell
 # Discovery
-dsc resource list LibreDsc.Databricks/User
+$result = dsc resource list LibreDsc.Databricks/User | ConvertFrom-Json
+$result.type | Should -Be 'LibreDsc.Databricks/User'
+$result.capabilities | Should -Contain 'get'
 
-# Operations
-dsc resource get -r LibreDsc.Databricks/User --input '{"user_name":"test@example.com"}'
-dsc resource set -r LibreDsc.Databricks/User --input '{"user_name":"test@example.com","display_name":"Test"}'
-dsc resource test -r LibreDsc.Databricks/User --input '{"user_name":"test@example.com","active":true}'
-dsc resource delete -r LibreDsc.Databricks/User --input '{"user_name":"test@example.com"}'
+# Get
+$inputJson = @{ user_name = $testUserName } | ConvertTo-Json -Compress
+$result = dsc resource get -r LibreDsc.Databricks/User --input $inputJson | ConvertFrom-Json
+$result.actualState._exist | Should -Be $true
+
+# Set
+$inputJson = @{ user_name = $testUserName; display_name = 'Test' } | ConvertTo-Json -Compress
+$result = dsc resource set -r LibreDsc.Databricks/User --input $inputJson | ConvertFrom-Json
+$result.afterState._exist | Should -Be $true
+
+# Test
+$result = dsc resource test -r LibreDsc.Databricks/User --input $inputJson | ConvertFrom-Json
+$result.inDesiredState | Should -Be $true
+
+# Delete
+$inputJson = @{ user_name = $testUserName } | ConvertTo-Json -Compress
+dsc resource delete -r LibreDsc.Databricks/User --input $inputJson | Out-Null
+$LASTEXITCODE | Should -Be 0
+
+# Export
+$result = dsc resource export -r LibreDsc.Databricks/User | ConvertFrom-Json
+$result.resources | Should -Not -BeNullOrEmpty
 ```
 
-Follow the Create → Verify → Cleanup pattern. Always clean up test resources.
+#### Writing Tests for a New Resource
 
-### Unit Tests
+When adding a new resource, create `tests/<ResourceName>.Tests.ps1` by copying the pattern from an existing test file (e.g., `User.Tests.ps1`) and updating:
+
+1. The resource type string (`LibreDsc.Databricks/<Name>`)
+2. The state properties tested (matching the resource's State struct JSON tags)
+3. The setup/teardown in `BeforeAll`/`AfterAll` (create any prerequisite resources)
+4. Add a unique name generator to `helpers.ps1` if the resource needs one
+
+### Unit Tests (Go)
 
 - Place test files next to the code they test (e.g., `user_test.go` in `internal/resources/`)
 - Use table-driven tests for multiple scenarios
