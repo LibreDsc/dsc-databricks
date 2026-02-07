@@ -106,8 +106,8 @@ func renderJSON(_ ResourceContext, v any) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal output: %w", err)
 	}
-	fmt.Fprintln(os.Stdout, string(data))
-	return nil
+	_, err = fmt.Fprintln(os.Stdout, string(data))
+	return err
 }
 
 // withInDesiredState merges the _inDesiredState canonical property into a state object.

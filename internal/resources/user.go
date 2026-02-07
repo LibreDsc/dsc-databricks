@@ -36,8 +36,8 @@ type UserSchemaInput struct {
 	Active      bool   `json:"active,omitempty"`
 }
 
-func (u UserSchemaInput) toIamUser() iam.User {
-	return iam.User{
+func (u UserSchemaInput) toCreateRequest() iam.CreateUserRequest {
+	return iam.CreateUserRequest{
 		Id:          u.ID,
 		UserName:    u.UserName,
 		DisplayName: u.DisplayName,
@@ -75,8 +75,7 @@ func (h *UserHandler) Get(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.
 		return nil, err
 	}
 
-	iamUser := req.toIamUser()
-	state, err := h.getCurrentState(ctx, &iamUser)
+	state, err := h.getCurrentState(ctx, &req)
 	if err != nil {
 		return nil, err
 	}
@@ -85,14 +84,14 @@ func (h *UserHandler) Get(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.
 }
 
 // getCurrentState retrieves the current state for a user from the API.
-func (h *UserHandler) getCurrentState(ctx dsc.ResourceContext, req *iam.User) (UserState, error) {
+func (h *UserHandler) getCurrentState(ctx dsc.ResourceContext, req *UserSchemaInput) (UserState, error) {
 	cmdCtx, w, err := getWorkspaceClient(ctx)
 	if err != nil {
 		return UserState{Exist: false}, err
 	}
 
-	if req.Id != "" {
-		user, err := w.Users.GetById(cmdCtx, req.Id)
+	if req.ID != "" {
+		user, err := w.UsersV2.Get(cmdCtx, iam.GetUserRequest{Id: req.ID})
 		if err != nil {
 			return UserState{Exist: false}, nil
 		}
@@ -100,7 +99,7 @@ func (h *UserHandler) getCurrentState(ctx dsc.ResourceContext, req *iam.User) (U
 	}
 
 	if req.UserName != "" {
-		users := w.Users.List(cmdCtx, iam.ListUsersRequest{
+		users := w.UsersV2.List(cmdCtx, iam.ListUsersRequest{
 			Filter: "userName eq \"" + req.UserName + "\"",
 		})
 
@@ -120,8 +119,7 @@ func (h *UserHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.
 		return nil, err
 	}
 
-	req := schemaInput.toIamUser()
-	beforeState, _ := h.getCurrentState(ctx, &req)
+	beforeState, _ := h.getCurrentState(ctx, &schemaInput)
 
 	cmdCtx, w, err := getWorkspaceClient(ctx)
 	if err != nil {
@@ -131,7 +129,7 @@ func (h *UserHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.
 	if beforeState.Exist {
 		// User already exists — GET the full user, overlay desired fields, then PUT back.
 		// SCIM PUT requires the complete user representation including schemas, emails, etc.
-		fullUser, err := w.Users.GetById(cmdCtx, beforeState.ID)
+		fullUser, err := w.UsersV2.Get(cmdCtx, iam.GetUserRequest{Id: beforeState.ID})
 		if err != nil {
 			return nil, fmt.Errorf("failed to get user for update: %w", err)
 		}
@@ -139,20 +137,21 @@ func (h *UserHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.
 			fullUser.DisplayName = schemaInput.DisplayName
 		}
 		fullUser.Active = schemaInput.Active
-		if err := w.Users.Update(cmdCtx, *fullUser); err != nil {
+		updateReq := userToUpdateRequest(fullUser)
+		if err := w.UsersV2.Update(cmdCtx, updateReq); err != nil {
 			return nil, fmt.Errorf("failed to update user: %w", err)
 		}
-		req.Id = beforeState.ID
-	} else if req.UserName != "" {
+		schemaInput.ID = beforeState.ID
+	} else if schemaInput.UserName != "" {
 		// User doesn't exist — create it.
-		if _, err := w.Users.Create(cmdCtx, req); err != nil {
+		if _, err := w.UsersV2.Create(cmdCtx, schemaInput.toCreateRequest()); err != nil {
 			return nil, err
 		}
 	} else {
 		return nil, dsc.ValidateRequired(dsc.RequiredField{Name: "user_name", Value: ""})
 	}
 
-	afterState, _ := h.getCurrentState(ctx, &req)
+	afterState, _ := h.getCurrentState(ctx, &schemaInput)
 	changedProps := dsc.CompareStates(beforeState, afterState)
 
 	return &dsc.SetResult{
@@ -168,9 +167,7 @@ func (h *UserHandler) Test(ctx dsc.ResourceContext, input json.RawMessage) (*dsc
 		return nil, err
 	}
 
-	req := schemaInput.toIamUser()
-
-	actualState, err := h.getCurrentState(ctx, &req)
+	actualState, err := h.getCurrentState(ctx, &schemaInput)
 	if err != nil {
 		return nil, err
 	}
@@ -200,27 +197,25 @@ func (h *UserHandler) Delete(ctx dsc.ResourceContext, input json.RawMessage) err
 		return err
 	}
 
-	req := schemaInput.toIamUser()
-
 	cmdCtx, w, err := getWorkspaceClient(ctx)
 	if err != nil {
 		return err
 	}
 
-	if req.Id != "" {
-		return w.Users.DeleteById(cmdCtx, req.Id)
+	if schemaInput.ID != "" {
+		return w.UsersV2.Delete(cmdCtx, iam.DeleteUserRequest{Id: schemaInput.ID})
 	}
 
-	if req.UserName != "" {
-		users := w.Users.List(cmdCtx, iam.ListUsersRequest{
-			Filter: "userName eq \"" + req.UserName + "\"",
+	if schemaInput.UserName != "" {
+		users := w.UsersV2.List(cmdCtx, iam.ListUsersRequest{
+			Filter: "userName eq \"" + schemaInput.UserName + "\"",
 		})
 
 		user, err := users.Next(cmdCtx)
 		if err != nil {
-			return dsc.NotFoundError("user", "user_name="+req.UserName)
+			return dsc.NotFoundError("user", "user_name="+schemaInput.UserName)
 		}
-		return w.Users.DeleteById(cmdCtx, user.Id)
+		return w.UsersV2.Delete(cmdCtx, iam.DeleteUserRequest{Id: user.Id})
 	}
 
 	return dsc.ValidateRequired(dsc.RequiredField{Name: "id or user_name", Value: ""})
@@ -234,7 +229,7 @@ func (h *UserHandler) Export(ctx dsc.ResourceContext) ([]any, error) {
 
 	var allUsers []any
 
-	users := w.Users.List(cmdCtx, iam.ListUsersRequest{})
+	users := w.UsersV2.List(cmdCtx, iam.ListUsersRequest{})
 	for {
 		user, err := users.Next(cmdCtx)
 		if err != nil {
@@ -253,6 +248,23 @@ func userToState(user *iam.User) UserState {
 		DisplayName: user.DisplayName,
 		Active:      user.Active,
 		Exist:       true,
+	}
+}
+
+// userToUpdateRequest converts a full iam.User (from Get) to an UpdateUserRequest for PUT.
+func userToUpdateRequest(user *iam.User) iam.UpdateUserRequest {
+	return iam.UpdateUserRequest{
+		Id:           user.Id,
+		Active:       user.Active,
+		DisplayName:  user.DisplayName,
+		Emails:       user.Emails,
+		Entitlements: user.Entitlements,
+		ExternalId:   user.ExternalId,
+		Groups:       user.Groups,
+		Name:         user.Name,
+		Roles:        user.Roles,
+		Schemas:      user.Schemas,
+		UserName:     user.UserName,
 	}
 }
 
