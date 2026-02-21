@@ -12,6 +12,7 @@ permissions:
 jobs:
   validate-azure:
     runs-on: ubuntu-latest
+    environment: integration
     steps:
     - name: Azure login
       uses: azure/login@v2
