@@ -12,10 +12,10 @@
     Directory for the build artifacts. Defaults to 'output' in the repository root.
 
 .EXAMPLE
-    .\.build.ps1
+    .\build.ps1
 
 .EXAMPLE
-    .\.build.ps1 -OutputPath C:\dsc-resources\databricks
+    .\build.ps1 -OutputPath C:\dsc-resources\databricks
 #>
 [CmdletBinding()]
 param (

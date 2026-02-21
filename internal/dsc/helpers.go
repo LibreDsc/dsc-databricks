@@ -118,7 +118,7 @@ func renderJSON(_ ResourceContext, v any) error {
 }
 
 // withInDesiredState merges the _inDesiredState canonical property into a state object.
-// DSC v3 expects the test output to include _inDesiredState in the actual state JSON.
+// Microsoft DSC expects the test output to include _inDesiredState in the actual state JSON.
 func withInDesiredState(state any, inDesiredState bool) (map[string]any, error) {
 	data, err := json.Marshal(state)
 	if err != nil {
