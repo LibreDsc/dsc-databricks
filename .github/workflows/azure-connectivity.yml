@@ -19,12 +19,10 @@ jobs:
         client-id: ${{ secrets.AZURE_CLIENT_ID }}
         tenant-id: ${{ secrets.AZURE_TENANT_ID }}
         subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        enable-AzPSSession: true
 
-    - name: Validate Azure connectivity
-      uses: azure/powershell@v2
+    - name: Azure CLI script
+      uses: azure/cli@v2
       with:
-        azPSVersion: latest
+        azcliversion: latest
         inlineScript: |
-          $context = Get-AzContext
-          Get-AzResourceGroup
+          az account show
