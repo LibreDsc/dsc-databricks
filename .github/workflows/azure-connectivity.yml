@@ -26,3 +26,4 @@ jobs:
         azcliversion: latest
         inlineScript: |
           az account show
+          echo "hi"
