@@ -1,0 +1,41 @@
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'README.md'
+      - 'CONTRIBUTING.md'
+      - 'LICENSE'
+      - '.github/*.md'
+      - '.github/FUNDING.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+name: Run Tests
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    environment: integration
+    permissions:
+      contents: read
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+
+    - name: Install Pester
+      shell: pwsh
+      run: Install-PSResource -Name Pester -Force -Scope CurrentUser -Version 5.7.1
+
+    - name: Build and run tests
+      shell: pwsh
+      run: ./build.ps1 -RunTests -Verbose
