@@ -34,7 +34,7 @@ jobs:
 
     - name: Install Pester
       shell: pwsh
-      run: Install-PSResource -Name Pester -Force -Scope CurrentUser -Version 5.7.1
+      run: Install-PSResource -Name Pester -Scope CurrentUser -Version 5.7.1 -Repository PSGallery -TrustRepository
 
     - name: Build and run tests
       shell: pwsh

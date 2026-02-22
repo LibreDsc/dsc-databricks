@@ -1,6 +1,6 @@
 module github.com/LibreDsc/dsc-databricks
 
-go 1.25.0
+go 1.24
 
 require (
 	github.com/databricks/databricks-sdk-go v0.104.0
