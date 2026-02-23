@@ -69,10 +69,10 @@ if ($RunTests)
             return
         }
 
-        $databricksInstance = Get-AzDatabricksWorkspace | Select-Object -First 1
+        $resourceGroup = Get-AzResourceGroup | Select-Object -First 1
+        $databricksInstance = Get-AzDatabricksWorkspace -ResourceGroupName $resourceGroup.ResourceGroupName | Select-Object -First 1
 
         if (-not $databricksInstance) {
-            $resourceGroup = Get-AzResourceGroup | Select-Object -First 1
             $params = @{
                 Name = 'dbt-e2e-test-' + [Guid]::NewGuid().ToString().Substring(0, 3)
                 ResourceGroupName = $resourceGroup.ResourceGroupName
