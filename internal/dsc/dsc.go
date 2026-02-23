@@ -75,6 +75,7 @@ type ResourceMetadata struct {
 	Version     string            `json:"version"`
 	Description string            `json:"description"`
 	Tags        []string          `json:"tags"`
+	OmitTest    bool              `json:"-"`
 }
 
 // ResourceSchema represents the embedded schema.
@@ -176,6 +177,15 @@ func listResourceTypes() []string {
 func buildManifest(resourceType string, metadata ResourceMetadata) ResourceManifest {
 	inputArg := JSONInputArg{JSONInputArg: "--input", Mandatory: true}
 
+	var testSpec *TestCommandSpec
+	if !metadata.OmitTest {
+		testSpec = &TestCommandSpec{
+			Executable: "dsc-databricks",
+			Args:       []any{"test", "--resource", resourceType, inputArg},
+			Return:     "state",
+		}
+	}
+
 	return ResourceManifest{
 		Schema:      "https://aka.ms/dsc/schemas/v3/bundled/resource/manifest.json",
 		Type:        resourceType,
@@ -193,11 +203,7 @@ func buildManifest(resourceType string, metadata ResourceMetadata) ResourceManif
 			Args:       []any{"set", "--resource", resourceType, inputArg},
 			Return:     "stateAndDiff",
 		},
-		Test: &TestCommandSpec{
-			Executable: "dsc-databricks",
-			Args:       []any{"test", "--resource", resourceType, inputArg},
-			Return:     "stateAndDiff",
-		},
+		Test: testSpec,
 		Delete: &CommandSpec{
 			Executable: "dsc-databricks",
 			Args:       []any{"delete", "--resource", resourceType, inputArg},

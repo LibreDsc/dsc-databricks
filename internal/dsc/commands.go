@@ -248,14 +248,7 @@ func newTestCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := renderJSON(ctx, stateWithDesired); err != nil {
-				return err
-			}
-			diffProps := result.DifferingProperties
-			if diffProps == nil {
-				diffProps = []string{}
-			}
-			return renderJSON(ctx, diffProps)
+			return renderJSON(ctx, stateWithDesired)
 		},
 	}
 

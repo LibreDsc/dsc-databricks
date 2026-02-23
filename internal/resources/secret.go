@@ -44,6 +44,10 @@ func secretMetadata() dsc.ResourceMetadata {
 		Tags:              []string{"databricks", "secret", "workspace"},
 		Descriptions:      secretPropertyDescriptions,
 		SchemaType:        reflect.TypeFor[workspace.PutSecret](),
+		// Secret only exposes scope, key, and _exist. Value equality is
+		// sufficient — the Databricks API never returns the secret value,
+		// so a custom test method adds no benefit over the synthetic one.
+		OmitTest: true,
 	})
 }
 

@@ -63,6 +63,33 @@ if (Test-Path $exePath)
 
 if ($RunTests) 
 {
+    if ($env:GITHUB_ACTIONS) {
+        if (-not (Get-Command -Name 'Connect-AzAccount' -ErrorAction Ignore)) {
+            Write-Verbose -Message "Skipping tests because Connect-AzAccount is not available in this environment."
+            return
+        }
+
+        $databricksInstance = Get-AzDatabricksWorkspace | Select-Object -First 1
+
+        if (-not $databricksInstance) {
+            $resourceGroup = Get-AzResourceGroup | Select-Object -First 1
+            $params = @{
+                Name = 'dbt-e2e-test-' + [Guid]::NewGuid().ToString().Substring(0, 3)
+                ResourceGroupName = $resourceGroup.ResourceGroupName
+                Sku = 'Premium'
+                Location = $resourceGroup.Location
+            }
+            $databricksInstance = New-AzDatabricksWorkspace @params
+        }
+
+        $env:DATABRICKS_HOST = "https://$($databricksInstance.Url)"
+        $env:DATABRICKS_TOKEN = (Get-AzAccessToken -ResourceUrl '2ff814a6-3304-4ab8-85cb-cd0e6f879c1d').Token | ConvertFrom-SecureString -AsPlainText
+    }
+
     $env:DSC_RESOURCE_PATH = $outputPath
     Invoke-Pester
+
+    if ($databricksInstance) {
+        Remove-AzDatabricksWorkspace -ResourceGroupName $databricksInstance.ResourceGroupName -Name $databricksInstance.Name -AsJob -NoWait
+    }
 }

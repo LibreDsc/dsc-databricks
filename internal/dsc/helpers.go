@@ -56,6 +56,10 @@ type MetadataConfig struct {
 	SchemaDescription string
 	ResourceName      string
 	Tags              []string
+	// OmitTest instructs buildManifest to exclude the test entry from the
+	// resource manifest. DSC will fall back to its synthetic test method,
+	// which compares desired state to actual state by value equality.
+	OmitTest bool
 }
 
 // DefaultExitCodes returns the standard exit codes for DSC resources.
@@ -96,6 +100,7 @@ func BuildMetadata(cfg MetadataConfig) ResourceMetadata {
 		Description: cfg.Description,
 		Tags:        cfg.Tags,
 		ExitCodes:   DefaultExitCodes(),
+		OmitTest:    cfg.OmitTest,
 		Schema: ResourceSchema{
 			Embedded: schema,
 		},
