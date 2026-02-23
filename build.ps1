@@ -87,9 +87,13 @@ if ($RunTests)
     }
 
     $env:DSC_RESOURCE_PATH = $outputPath
-    Invoke-Pester -ErrorAction Stop
+    $failures = (Invoke-Pester -PassThru -ErrorAction Ignore).FailedCount
 
     if ($databricksInstance) {
         Remove-AzDatabricksWorkspace -ResourceGroupName $databricksInstance.ResourceGroupName -Name $databricksInstance.Name -AsJob -NoWait
+    }
+
+    if ($failures -ne 0) {
+        throw "$failures tests failed."
     }
 }
