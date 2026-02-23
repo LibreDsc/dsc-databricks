@@ -87,7 +87,7 @@ if ($RunTests)
     }
 
     $env:DSC_RESOURCE_PATH = $outputPath
-    Invoke-Pester
+    Invoke-Pester -ErrorAction Stop
 
     if ($databricksInstance) {
         Remove-AzDatabricksWorkspace -ResourceGroupName $databricksInstance.ResourceGroupName -Name $databricksInstance.Name -AsJob -NoWait
