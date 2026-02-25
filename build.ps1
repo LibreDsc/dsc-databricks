@@ -89,7 +89,7 @@ if ($RunTests)
     $env:DSC_RESOURCE_PATH = $outputPath
     $failures = (Invoke-Pester -PassThru -ErrorAction Ignore).FailedCount
 
-    if ($databricksInstance) {
+    if ($databricksInstance -and $env:GITHUB_ACTIONS) {
         Remove-AzDatabricksWorkspace -ResourceGroupName $databricksInstance.ResourceGroupName -Name $databricksInstance.Name -AsJob -NoWait
     }
 

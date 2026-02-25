@@ -60,3 +60,43 @@ function New-TestUserName
     #>
     return "dsc-test-user-$(Get-Random -Minimum 10000 -Maximum 99999)@example.com"
 }
+
+function Get-DatabricksRepoParent
+{
+    <#
+    .SYNOPSIS
+        Returns the parent path under /Repos where test repos should be created.
+    .DESCRIPTION
+        If DATABRICKS_REPO_PARENT is set, uses that value. Otherwise queries the
+        Databricks SCIM Me endpoint to discover the current user's personal Repos
+        folder (/Repos/<userName>), which is auto-created by Databricks.
+    #>
+    [CmdletBinding()]
+    param ()
+
+    if ($env:DATABRICKS_REPO_PARENT)
+    {
+        return $env:DATABRICKS_REPO_PARENT.TrimEnd('/')
+    }
+
+    if (-not $script:_repoParent)
+    {
+        $baseUrl = $env:DATABRICKS_HOST.TrimEnd('/')
+        $headers = @{ Authorization = "Bearer $env:DATABRICKS_TOKEN" }
+        $me = Invoke-RestMethod -Uri "$baseUrl/api/2.0/preview/scim/v2/Me" -Headers $headers
+        $script:_repoParent = "/Repos/$($me.userName)"
+        Write-Verbose "Auto-detected repo parent: $($script:_repoParent)"
+    }
+
+    return $script:_repoParent
+}
+
+function New-TestRepoPath
+{
+    <#
+    .SYNOPSIS
+        Generates a unique workspace path for a test Git folder (repo).
+    #>
+    $parent = Get-DatabricksRepoParent
+    return "$parent/dsc-test-repo-$(Get-Random -Minimum 10000 -Maximum 99999)"
+}
