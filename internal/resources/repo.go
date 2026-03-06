@@ -51,12 +51,12 @@ func repoMetadata() dsc.ResourceMetadata {
 
 // RepoState represents the full state of a Databricks repo.
 type RepoState struct {
-	ID           int64  `json:"id,omitempty"`
 	Path         string `json:"path"`
 	URL          string `json:"url,omitempty"`
 	Provider     string `json:"provider,omitempty"`
 	Branch       string `json:"branch,omitempty"`
 	HeadCommitID string `json:"head_commit_id,omitempty"`
+	ID           int64  `json:"id,omitempty"`
 	Exist        bool   `json:"_exist"`
 }
 
