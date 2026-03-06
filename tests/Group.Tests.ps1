@@ -123,12 +123,14 @@ Describe 'Databricks Group Resource' -Tag 'Databricks', 'Group' -Skip:(!$script:
             $result.afterState.display_name | Should -Be $newName
             $result.changedProperties | Should -Contain 'display_name'
             $script:testGroupName = $newName
+            $script:testGroupId = $current.actualState.id
         }
     }
 
     Context 'Test Operation' -Tag 'Test' {
         It 'should report in desired state when display_name matches' {
             $inputJson = @{
+                id           = $script:testGroupId
                 display_name = $script:testGroupName
             } | ConvertTo-Json -Compress
 
@@ -139,7 +141,7 @@ Describe 'Databricks Group Resource' -Tag 'Databricks', 'Group' -Skip:(!$script:
 
         It 'should report out of desired state when display_name does not match' {
             $inputJson = @{
-                id           = (dsc resource get -r LibreDsc.Databricks/Group --input (@{ display_name = $script:testGroupName } | ConvertTo-Json -Compress) | ConvertFrom-Json).actualState.id
+                id           = $script:testGroupId
                 display_name = 'wrong-display-name'
             } | ConvertTo-Json -Compress
 
