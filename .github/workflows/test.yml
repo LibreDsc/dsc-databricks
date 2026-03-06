@@ -8,6 +8,15 @@ on:
       - 'LICENSE'
       - '.github/*.md'
       - '.github/FUNDING.yml'
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - 'README.md'
+      - 'CONTRIBUTING.md'
+      - 'LICENSE'
+      - '.github/*.md'
+      - '.github/FUNDING.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
