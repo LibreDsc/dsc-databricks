@@ -100,6 +100,15 @@ function New-TestServicePrincipalName
     return "dsc-test-sp-$(Get-Random -Minimum 10000 -Maximum 99999)"
 }
 
+function New-TestGroupName
+{
+    <#
+    .SYNOPSIS
+        Generates a unique display name for a test group.
+    #>
+    return "dsc-test-group-$(Get-Random -Minimum 10000 -Maximum 99999)"
+}
+
 function New-TestRepoPath
 {
     <#
