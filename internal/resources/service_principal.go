@@ -49,8 +49,6 @@ func servicePrincipalMetadata() dsc.ResourceMetadata {
 }
 
 // ServicePrincipalState represents the full state of a Databricks service principal.
-// Pointer-containing fields (strings, slices) are ordered before value fields (bool)
-// to minimise the GC pointer-scan range.
 type ServicePrincipalState struct {
 	DisplayName   string             `json:"display_name"`
 	ApplicationID string             `json:"application_id,omitempty"`
