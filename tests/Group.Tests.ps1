@@ -95,6 +95,7 @@ Describe 'Databricks Group Resource' -Tag 'Databricks', 'Group' -Skip:(!$script:
             $result.afterState._exist | Should -Be $true
             $result.afterState.display_name | Should -Be $script:testGroupName
             $result.changedProperties | Should -Contain '_exist'
+            $script:testGroupId = $result.afterState.id
         }
 
         It 'should verify the created group via get' {
@@ -108,12 +109,10 @@ Describe 'Databricks Group Resource' -Tag 'Databricks', 'Group' -Skip:(!$script:
 
     Context 'Set Operation - Update Group' -Tag 'Set' {
         It 'should update the display_name of the group' {
-            $getJson = @{ display_name = $script:testGroupName } | ConvertTo-Json -Compress
-            $current = dsc resource get -r LibreDsc.Databricks/Group --input $getJson | ConvertFrom-Json
             $newName = "$($script:testGroupName)-updated"
 
             $inputJson = @{
-                id           = $current.actualState.id
+                id           = $script:testGroupId
                 display_name = $newName
             } | ConvertTo-Json -Compress
 
@@ -123,7 +122,6 @@ Describe 'Databricks Group Resource' -Tag 'Databricks', 'Group' -Skip:(!$script:
             $result.afterState.display_name | Should -Be $newName
             $result.changedProperties | Should -Contain 'display_name'
             $script:testGroupName = $newName
-            $script:testGroupId = $current.actualState.id
         }
     }
 
