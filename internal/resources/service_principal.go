@@ -156,15 +156,16 @@ func (h *ServicePrincipalHandler) Set(ctx dsc.ResourceContext, input json.RawMes
 			full.Roles = toIamComplexValues(schemaInput.Roles)
 		}
 		if err := w.ServicePrincipalsV2.Update(cmdCtx, iam.UpdateServicePrincipalRequest{
-			Id:           full.Id,
-			DisplayName:  full.DisplayName,
-			Active:       full.Active,
-			ApplicationId: full.ApplicationId,
-			ExternalId:   full.ExternalId,
-			Entitlements: full.Entitlements,
-			Groups:       full.Groups,
-			Roles:        full.Roles,
-			Schemas:      full.Schemas,
+			Id:              full.Id,
+			DisplayName:     full.DisplayName,
+			Active:          full.Active,
+			ApplicationId:   full.ApplicationId,
+			ExternalId:      full.ExternalId,
+			Entitlements:    full.Entitlements,
+			Groups:          full.Groups,
+			Roles:           full.Roles,
+			Schemas:         full.Schemas,
+			ForceSendFields: []string{"Active"},
 		}); err != nil {
 			return nil, fmt.Errorf("failed to update service principal: %w", err)
 		}
