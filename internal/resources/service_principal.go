@@ -42,7 +42,7 @@ func servicePrincipalMetadata() dsc.ResourceMetadata {
 		Description:       "Manage Databricks service principals",
 		SchemaDescription: "Schema for managing Databricks service principals.",
 		ResourceName:      "service principal",
-		Tags:              []string{"databricks", "service-principal", "iam", "workspace"},
+		Tags:              []string{"databricks", "serviceprincipal", "iam", "workspace"},
 		Descriptions:      servicePrincipalPropertyDescriptions,
 		SchemaType:        reflect.TypeFor[ServicePrincipalSchemaInput](),
 	})
