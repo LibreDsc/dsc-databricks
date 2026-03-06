@@ -138,8 +138,10 @@ func withInDesiredState(state any, inDesiredState bool) (map[string]any, error) 
 }
 
 // CompareStates compares two states (as JSON-serializable structs) and returns
-// the list of property names that differ. This is used by the Test operation
-// to report differing properties.
+// the list of property names that differ. Only keys present in desired are
+// checked — keys absent from desired but present in actual are ignored. This
+// is the correct behaviour for the Test operation, where the user only
+// specifies the subset of properties they care about.
 func CompareStates(desired, actual any) []string {
 	desiredJSON, err := json.Marshal(desired)
 	if err != nil {
@@ -171,6 +173,50 @@ func CompareStates(desired, actual any) []string {
 			differing = append(differing, key)
 		}
 	}
+	return differing
+}
 
+// CompareAllStates compares two full server states and returns every property
+// name that differs, including properties absent in before but present in
+// after (i.e. newly-set optional fields). Use this in Set to build
+// changedProperties from beforeState vs afterState.
+func CompareAllStates(before, after any) []string {
+	beforeJSON, err := json.Marshal(before)
+	if err != nil {
+		return nil
+	}
+	afterJSON, err := json.Marshal(after)
+	if err != nil {
+		return nil
+	}
+
+	var beforeMap map[string]json.RawMessage
+	var afterMap map[string]json.RawMessage
+
+	if err := json.Unmarshal(beforeJSON, &beforeMap); err != nil {
+		return nil
+	}
+	if err := json.Unmarshal(afterJSON, &afterMap); err != nil {
+		return nil
+	}
+
+	seen := make(map[string]bool)
+	var differing []string
+
+	for key, beforeVal := range beforeMap {
+		seen[key] = true
+		afterVal, ok := afterMap[key]
+		if !ok || string(beforeVal) != string(afterVal) {
+			differing = append(differing, key)
+		}
+	}
+	for key, afterVal := range afterMap {
+		if seen[key] {
+			continue
+		}
+		// key newly appeared in after (was omitted via omitempty in before)
+		_ = afterVal
+		differing = append(differing, key)
+	}
 	return differing
 }

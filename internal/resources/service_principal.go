@@ -267,15 +267,14 @@ func (h *ServicePrincipalHandler) Export(ctx dsc.ResourceContext) ([]any, error)
 		return nil, err
 	}
 
-	var allSPs []any
+	sps, err := w.ServicePrincipalsV2.ListAll(cmdCtx, iam.ListServicePrincipalsRequest{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list service principals: %w", err)
+	}
 
-	sps := w.ServicePrincipalsV2.List(cmdCtx, iam.ListServicePrincipalsRequest{})
-	for {
-		sp, err := sps.Next(cmdCtx)
-		if err != nil {
-			break
-		}
-		allSPs = append(allSPs, spToState(&sp))
+	var allSPs []any
+	for i := range sps {
+		allSPs = append(allSPs, spToState(&sps[i]))
 	}
 
 	return allSPs, nil

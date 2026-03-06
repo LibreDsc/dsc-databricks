@@ -296,15 +296,14 @@ func (h *UserHandler) Export(ctx dsc.ResourceContext) ([]any, error) {
 		return nil, err
 	}
 
-	var allUsers []any
+	users, err := w.UsersV2.ListAll(cmdCtx, iam.ListUsersRequest{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list users: %w", err)
+	}
 
-	users := w.UsersV2.List(cmdCtx, iam.ListUsersRequest{})
-	for {
-		user, err := users.Next(cmdCtx)
-		if err != nil {
-			break
-		}
-		allUsers = append(allUsers, userToState(&user))
+	var allUsers []any
+	for i := range users {
+		allUsers = append(allUsers, userToState(&users[i]))
 	}
 
 	return allUsers, nil
@@ -360,17 +359,18 @@ func fromIamComplexValues(vals []iam.ComplexValue) []UserComplexValue {
 // userToUpdateRequest converts a full iam.User (from Get) to an UpdateUserRequest for PUT.
 func userToUpdateRequest(user *iam.User) iam.UpdateUserRequest {
 	return iam.UpdateUserRequest{
-		Id:           user.Id,
-		Active:       user.Active,
-		DisplayName:  user.DisplayName,
-		Emails:       user.Emails,
-		Entitlements: user.Entitlements,
-		ExternalId:   user.ExternalId,
-		Groups:       user.Groups,
-		Name:         user.Name,
-		Roles:        user.Roles,
-		Schemas:      user.Schemas,
-		UserName:     user.UserName,
+		Id:              user.Id,
+		Active:          user.Active,
+		DisplayName:     user.DisplayName,
+		Emails:          user.Emails,
+		Entitlements:    user.Entitlements,
+		ExternalId:      user.ExternalId,
+		Groups:          user.Groups,
+		Name:            user.Name,
+		Roles:           user.Roles,
+		Schemas:         user.Schemas,
+		UserName:        user.UserName,
+		ForceSendFields: []string{"Active"},
 	}
 }
 
