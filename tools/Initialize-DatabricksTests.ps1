@@ -118,6 +118,15 @@ function New-TestClusterPolicyName
     return "dsc-test-policy-$(Get-Random -Minimum 10000 -Maximum 99999)"
 }
 
+function New-TestClusterName
+{
+    <#
+    .SYNOPSIS
+        Generates a unique name for a test cluster.
+    #>
+    return "dsc-test-cluster-$(Get-Random -Minimum 10000 -Maximum 99999)"
+}
+
 function New-TestRepoPath
 {
     <#
