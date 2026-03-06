@@ -30,9 +30,9 @@ type ServicePrincipalSchemaInput struct {
 	DisplayName   string             `json:"display_name"`
 	ApplicationID string             `json:"application_id,omitempty"`
 	ExternalID    string             `json:"external_id,omitempty"`
+	ID            string             `json:"id,omitempty"`
 	Entitlements  []UserComplexValue `json:"entitlements,omitempty"`
 	Roles         []UserComplexValue `json:"roles,omitempty"`
-	ID            string             `json:"id,omitempty"`
 	Active        bool               `json:"active,omitempty"`
 }
 
@@ -53,9 +53,9 @@ type ServicePrincipalState struct {
 	DisplayName   string             `json:"display_name"`
 	ApplicationID string             `json:"application_id,omitempty"`
 	ExternalID    string             `json:"external_id,omitempty"`
+	ID            string             `json:"id,omitempty"`
 	Entitlements  []UserComplexValue `json:"entitlements,omitempty"`
 	Roles         []UserComplexValue `json:"roles,omitempty"`
-	ID            string             `json:"id,omitempty"`
 	Active        bool               `json:"active"`
 	Exist         bool               `json:"_exist"`
 }
