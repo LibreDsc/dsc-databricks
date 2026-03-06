@@ -91,6 +91,15 @@ function Get-DatabricksRepoParent
     return $script:_repoParent
 }
 
+function New-TestServicePrincipalName
+{
+    <#
+    .SYNOPSIS
+        Generates a unique display name for a test service principal.
+    #>
+    return "dsc-test-sp-$(Get-Random -Minimum 10000 -Maximum 99999)"
+}
+
 function New-TestRepoPath
 {
     <#
