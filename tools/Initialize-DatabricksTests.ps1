@@ -127,6 +127,15 @@ function New-TestClusterName
     return "dsc-test-cluster-$(Get-Random -Minimum 10000 -Maximum 99999)"
 }
 
+function New-TestSqlWarehouseName
+{
+    <#
+    .SYNOPSIS
+        Generates a unique name for a test SQL warehouse.
+    #>
+    return "dsc-test-warehouse-$(Get-Random -Minimum 10000 -Maximum 99999)"
+}
+
 function New-TestRepoPath
 {
     <#
