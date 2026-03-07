@@ -136,6 +136,15 @@ function New-TestSqlWarehouseName
     return "dsc-test-warehouse-$(Get-Random -Minimum 10000 -Maximum 99999)"
 }
 
+function New-TestCatalogName
+{
+    <#
+    .SYNOPSIS
+        Generates a unique name for a test Unity Catalog catalog.
+    #>
+    return "dsc_test_catalog_$(Get-Random -Minimum 10000 -Maximum 99999)"
+}
+
 function New-TestRepoPath
 {
     <#
