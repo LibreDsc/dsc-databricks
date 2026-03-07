@@ -249,15 +249,14 @@ func (h *SqlWarehouseHandler) Set(ctx dsc.ResourceContext, input json.RawMessage
 		editReq := buildEditWarehouseRequest(beforeState.ID, &schemaInput, effectiveName)
 
 		// If the warehouse is STOPPED, Edit applies the config for next start
-		// without restarting. If RUNNING, EditAndWait waits for the restart.
-		if beforeState.State == "STOPPED" {
-			if _, err := w.Warehouses.Edit(cmdCtx, editReq); err != nil {
-				return nil, fmt.Errorf("failed to update SQL warehouse: %w", err)
-			}
-		} else {
-			_, err = w.Warehouses.EditAndWait(cmdCtx, editReq)
-			if err != nil {
-				return nil, fmt.Errorf("failed to update SQL warehouse: %w", err)
+		// without restarting. If RUNNING, wait for the restart to complete.
+		wait, err := w.Warehouses.Edit(cmdCtx, editReq)
+		if err != nil {
+			return nil, fmt.Errorf("failed to update SQL warehouse: %w", err)
+		}
+		if beforeState.State != "STOPPED" {
+			if _, err := wait.Get(); err != nil {
+				return nil, fmt.Errorf("failed waiting for SQL warehouse restart: %w", err)
 			}
 		}
 
@@ -277,9 +276,13 @@ func (h *SqlWarehouseHandler) Set(ctx dsc.ResourceContext, input json.RawMessage
 		}
 
 		createReq := buildCreateWarehouseRequest(&schemaInput)
-		created, err := w.Warehouses.CreateAndWait(cmdCtx, createReq)
+		wait, err := w.Warehouses.Create(cmdCtx, createReq)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create SQL warehouse: %w", err)
+		}
+		created, err := wait.Get()
+		if err != nil {
+			return nil, fmt.Errorf("failed waiting for SQL warehouse to start: %w", err)
 		}
 		afterState = warehouseResponseToState(created)
 	}
@@ -361,12 +364,16 @@ func (h *SqlWarehouseHandler) Delete(ctx dsc.ResourceContext, input json.RawMess
 		return nil
 	}
 
-	if resp.State == sql.StateRunning || resp.State == sql.StateStarting {
-		_, err = w.Warehouses.StopAndWait(cmdCtx, sql.StopRequest{Id: warehouseID})
+	switch resp.State {
+	case sql.StateRunning, sql.StateStarting:
+		wait, err := w.Warehouses.Stop(cmdCtx, sql.StopRequest{Id: warehouseID})
 		if err != nil {
 			return fmt.Errorf("failed to stop SQL warehouse: %w", err)
 		}
-	} else if resp.State == sql.StateStopping {
+		if _, err := wait.Get(); err != nil {
+			return fmt.Errorf("failed waiting for SQL warehouse to stop: %w", err)
+		}
+	case sql.StateStopping:
 		_, err = w.Warehouses.WaitGetWarehouseStopped(cmdCtx, warehouseID, 20*time.Minute, nil)
 		if err != nil {
 			return fmt.Errorf("failed waiting for SQL warehouse to stop: %w", err)

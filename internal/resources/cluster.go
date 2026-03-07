@@ -282,16 +282,15 @@ func (h *ClusterHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*d
 		editReq := buildEditRequest(beforeState.ClusterID, &schemaInput, effectiveName, effectiveSparkVersion)
 
 		// If the cluster is TERMINATED, Edit won't restart it — the updated
-		// config applies on next start. Use EditAndWait when RUNNING so the
-		// restart completes before we return.
-		if beforeState.State == "TERMINATED" {
-			if _, err := w.Clusters.Edit(cmdCtx, editReq); err != nil {
-				return nil, fmt.Errorf("failed to update cluster: %w", err)
-			}
-		} else {
-			_, err = w.Clusters.EditAndWait(cmdCtx, editReq)
-			if err != nil {
-				return nil, fmt.Errorf("failed to update cluster: %w", err)
+		// config applies on next start. When RUNNING, wait for restart to
+		// complete before we return.
+		wait, err := w.Clusters.Edit(cmdCtx, editReq)
+		if err != nil {
+			return nil, fmt.Errorf("failed to update cluster: %w", err)
+		}
+		if beforeState.State != "TERMINATED" {
+			if _, err := wait.Get(); err != nil {
+				return nil, fmt.Errorf("failed waiting for cluster restart: %w", err)
 			}
 		}
 
@@ -311,9 +310,13 @@ func (h *ClusterHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*d
 		}
 
 		createReq := buildCreateRequest(&schemaInput)
-		created, err := w.Clusters.CreateAndWait(cmdCtx, createReq)
+		wait, err := w.Clusters.Create(cmdCtx, createReq)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create cluster: %w", err)
+		}
+		created, err := wait.Get()
+		if err != nil {
+			return nil, fmt.Errorf("failed waiting for cluster to start: %w", err)
 		}
 		afterState = clusterToState(created)
 	}
@@ -404,9 +407,12 @@ func (h *ClusterHandler) Delete(ctx dsc.ResourceContext, input json.RawMessage) 
 	}
 
 	if cluster.State != compute.StateTerminated && cluster.State != compute.StateTerminating {
-		_, err = w.Clusters.DeleteAndWait(cmdCtx, compute.DeleteCluster{ClusterId: clusterID})
+		wait, err := w.Clusters.Delete(cmdCtx, compute.DeleteCluster{ClusterId: clusterID})
 		if err != nil {
 			return fmt.Errorf("failed to terminate cluster: %w", err)
+		}
+		if _, err := wait.Get(); err != nil {
+			return fmt.Errorf("failed waiting for cluster termination: %w", err)
 		}
 	} else if cluster.State == compute.StateTerminating {
 		// Wait for termination to complete before permanent delete.
