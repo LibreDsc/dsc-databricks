@@ -39,14 +39,14 @@ type SqlWarehouseSchemaInput struct {
 	ID                     string `json:"id,omitempty"`
 	Name                   string `json:"name,omitempty"`
 	ClusterSize            string `json:"cluster_size,omitempty"`
+	SpotInstancePolicy     string `json:"spot_instance_policy,omitempty"`
+	WarehouseType          string `json:"warehouse_type,omitempty"`
+	Channel                string `json:"channel,omitempty"`
 	AutoStopMins           int    `json:"auto_stop_mins,omitempty"`
 	MinNumClusters         int    `json:"min_num_clusters,omitempty"`
 	MaxNumClusters         int    `json:"max_num_clusters,omitempty"`
 	EnablePhoton           bool   `json:"enable_photon,omitempty"`
 	EnableServerlessCompute bool   `json:"enable_serverless_compute,omitempty"`
-	SpotInstancePolicy     string `json:"spot_instance_policy,omitempty"`
-	WarehouseType          string `json:"warehouse_type,omitempty"`
-	Channel                string `json:"channel,omitempty"`
 }
 
 func sqlWarehouseMetadata() dsc.ResourceMetadata {
@@ -71,16 +71,16 @@ type SqlWarehouseState struct {
 	ID                     string `json:"id,omitempty"`
 	Name                   string `json:"name,omitempty"`
 	ClusterSize            string `json:"cluster_size,omitempty"`
-	AutoStopMins           int    `json:"auto_stop_mins,omitempty"`
-	MinNumClusters         int    `json:"min_num_clusters,omitempty"`
-	MaxNumClusters         int    `json:"max_num_clusters,omitempty"`
-	EnablePhoton           bool   `json:"enable_photon,omitempty"`
-	EnableServerlessCompute bool   `json:"enable_serverless_compute,omitempty"`
 	SpotInstancePolicy     string `json:"spot_instance_policy,omitempty"`
 	WarehouseType          string `json:"warehouse_type,omitempty"`
 	Channel                string `json:"channel,omitempty"`
 	State                  string `json:"state,omitempty"`
+	AutoStopMins           int    `json:"auto_stop_mins,omitempty"`
+	MinNumClusters         int    `json:"min_num_clusters,omitempty"`
+	MaxNumClusters         int    `json:"max_num_clusters,omitempty"`
 	NumClusters            int    `json:"num_clusters,omitempty"`
+	EnablePhoton           bool   `json:"enable_photon,omitempty"`
+	EnableServerlessCompute bool   `json:"enable_serverless_compute,omitempty"`
 	Exist                  bool   `json:"_exist"`
 }
 

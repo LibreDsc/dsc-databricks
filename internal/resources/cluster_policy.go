@@ -33,9 +33,9 @@ type ClusterPolicySchemaInput struct {
 	PolicyID                        string `json:"policy_id,omitempty"`
 	Definition                      string `json:"definition,omitempty"`
 	Description                     string `json:"description,omitempty"`
-	MaxClustersPerUser              int64  `json:"max_clusters_per_user,omitempty"`
 	PolicyFamilyID                  string `json:"policy_family_id,omitempty"`
 	PolicyFamilyDefinitionOverrides string `json:"policy_family_definition_overrides,omitempty"`
+	MaxClustersPerUser              int64  `json:"max_clusters_per_user,omitempty"`
 }
 
 func clusterPolicyMetadata() dsc.ResourceMetadata {
@@ -60,9 +60,9 @@ type ClusterPolicyState struct {
 	PolicyID                        string `json:"policy_id,omitempty"`
 	Definition                      string `json:"definition,omitempty"`
 	Description                     string `json:"description,omitempty"`
-	MaxClustersPerUser              int64  `json:"max_clusters_per_user,omitempty"`
 	PolicyFamilyID                  string `json:"policy_family_id,omitempty"`
 	PolicyFamilyDefinitionOverrides string `json:"policy_family_definition_overrides,omitempty"`
+	MaxClustersPerUser              int64  `json:"max_clusters_per_user,omitempty"`
 	Exist                           bool   `json:"_exist"`
 }
 

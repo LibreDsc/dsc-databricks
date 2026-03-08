@@ -34,6 +34,8 @@ var catalogPropertyDescriptions = dsc.PropertyDescriptions{
 // CatalogSchemaInput defines the desired-state fields for the schema
 // and for unmarshaling input. name is the primary identifier.
 type CatalogSchemaInput struct {
+	Properties                  map[string]string `json:"properties,omitempty"`
+	Options                     map[string]string `json:"options,omitempty"`
 	Name                        string            `json:"name"`
 	Comment                     string            `json:"comment,omitempty"`
 	Owner                       string            `json:"owner,omitempty"`
@@ -43,8 +45,6 @@ type CatalogSchemaInput struct {
 	ProviderName                string            `json:"provider_name,omitempty"`
 	ShareName                   string            `json:"share_name,omitempty"`
 	EnablePredictiveOptimization string           `json:"enable_predictive_optimization,omitempty"`
-	Properties                  map[string]string `json:"properties,omitempty"`
-	Options                     map[string]string `json:"options,omitempty"`
 }
 
 func catalogMetadata() dsc.ResourceMetadata {
@@ -61,6 +61,8 @@ func catalogMetadata() dsc.ResourceMetadata {
 
 // CatalogState represents the full state of a Unity Catalog catalog.
 type CatalogState struct {
+	Properties                  map[string]string `json:"properties,omitempty"`
+	Options                     map[string]string `json:"options,omitempty"`
 	Name                        string            `json:"name"`
 	Comment                     string            `json:"comment,omitempty"`
 	Owner                       string            `json:"owner,omitempty"`
@@ -73,8 +75,6 @@ type CatalogState struct {
 	EnablePredictiveOptimization string           `json:"enable_predictive_optimization,omitempty"`
 	CatalogType                 string            `json:"catalog_type,omitempty"`
 	MetastoreID                 string            `json:"metastore_id,omitempty"`
-	Properties                  map[string]string `json:"properties,omitempty"`
-	Options                     map[string]string `json:"options,omitempty"`
 	Exist                       bool              `json:"_exist"`
 }
 

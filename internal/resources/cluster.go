@@ -44,24 +44,24 @@ var clusterPropertyDescriptions = dsc.PropertyDescriptions{
 // one pass schema validation. state and state_message are read-only (omitted
 // from input).
 type ClusterSchemaInput struct {
+	SparkConf              map[string]string  `json:"spark_conf,omitempty"`
+	CustomTags             map[string]string  `json:"custom_tags,omitempty"`
 	ClusterID              string            `json:"cluster_id,omitempty"`
 	ClusterName            string            `json:"cluster_name,omitempty"`
 	SparkVersion           string            `json:"spark_version,omitempty"`
 	NodeTypeID             string            `json:"node_type_id,omitempty"`
 	DriverNodeTypeID       string            `json:"driver_node_type_id,omitempty"`
-	NumWorkers             int               `json:"num_workers,omitempty"`
-	AutoscaleMinWorkers    int               `json:"autoscale_min_workers,omitempty"`
-	AutoscaleMaxWorkers    int               `json:"autoscale_max_workers,omitempty"`
-	AutoterminationMinutes int               `json:"autotermination_minutes,omitempty"`
-	SparkConf              map[string]string  `json:"spark_conf,omitempty"`
-	CustomTags             map[string]string  `json:"custom_tags,omitempty"`
 	DataSecurityMode       string            `json:"data_security_mode,omitempty"`
 	SingleUserName         string            `json:"single_user_name,omitempty"`
 	PolicyID               string            `json:"policy_id,omitempty"`
 	InstancePoolID         string            `json:"instance_pool_id,omitempty"`
 	DriverInstancePoolID   string            `json:"driver_instance_pool_id,omitempty"`
-	EnableElasticDisk      bool              `json:"enable_elastic_disk,omitempty"`
 	RuntimeEngine          string            `json:"runtime_engine,omitempty"`
+	NumWorkers             int               `json:"num_workers,omitempty"`
+	AutoscaleMinWorkers    int               `json:"autoscale_min_workers,omitempty"`
+	AutoscaleMaxWorkers    int               `json:"autoscale_max_workers,omitempty"`
+	AutoterminationMinutes int               `json:"autotermination_minutes,omitempty"`
+	EnableElasticDisk      bool              `json:"enable_elastic_disk,omitempty"`
 }
 
 func clusterMetadata() dsc.ResourceMetadata {
@@ -84,26 +84,26 @@ func clusterMetadata() dsc.ResourceMetadata {
 
 // ClusterState represents the full state of a Databricks cluster.
 type ClusterState struct {
+	SparkConf              map[string]string  `json:"spark_conf,omitempty"`
+	CustomTags             map[string]string  `json:"custom_tags,omitempty"`
 	ClusterID              string            `json:"cluster_id,omitempty"`
 	ClusterName            string            `json:"cluster_name,omitempty"`
 	SparkVersion           string            `json:"spark_version,omitempty"`
 	NodeTypeID             string            `json:"node_type_id,omitempty"`
 	DriverNodeTypeID       string            `json:"driver_node_type_id,omitempty"`
-	NumWorkers             int               `json:"num_workers,omitempty"`
-	AutoscaleMinWorkers    int               `json:"autoscale_min_workers,omitempty"`
-	AutoscaleMaxWorkers    int               `json:"autoscale_max_workers,omitempty"`
-	AutoterminationMinutes int               `json:"autotermination_minutes,omitempty"`
 	State                  string            `json:"state,omitempty"`
 	StateMessage           string            `json:"state_message,omitempty"`
-	SparkConf              map[string]string  `json:"spark_conf,omitempty"`
-	CustomTags             map[string]string  `json:"custom_tags,omitempty"`
 	DataSecurityMode       string            `json:"data_security_mode,omitempty"`
 	SingleUserName         string            `json:"single_user_name,omitempty"`
 	PolicyID               string            `json:"policy_id,omitempty"`
 	InstancePoolID         string            `json:"instance_pool_id,omitempty"`
 	DriverInstancePoolID   string            `json:"driver_instance_pool_id,omitempty"`
-	EnableElasticDisk      bool              `json:"enable_elastic_disk,omitempty"`
 	RuntimeEngine          string            `json:"runtime_engine,omitempty"`
+	NumWorkers             int               `json:"num_workers,omitempty"`
+	AutoscaleMinWorkers    int               `json:"autoscale_min_workers,omitempty"`
+	AutoscaleMaxWorkers    int               `json:"autoscale_max_workers,omitempty"`
+	AutoterminationMinutes int               `json:"autotermination_minutes,omitempty"`
+	EnableElasticDisk      bool              `json:"enable_elastic_disk,omitempty"`
 	Exist                  bool              `json:"_exist"`
 }
 
