@@ -154,3 +154,12 @@ function New-TestRepoPath
     $parent = Get-DatabricksRepoParent
     return "$parent/dsc-test-repo-$(Get-Random -Minimum 10000 -Maximum 99999)"
 }
+
+function New-TestAccountUserName
+{
+    <#
+    .SYNOPSIS
+        Generates a unique account user name (email) for testing.
+    #>
+    return "dsc-test-acctuser-$(Get-Random -Minimum 10000 -Maximum 99999)@example.com"
+}

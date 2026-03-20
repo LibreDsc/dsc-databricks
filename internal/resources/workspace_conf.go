@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/LibreDsc/dsc-databricks/internal/dsc"
 	"github.com/databricks/databricks-sdk-go/service/settings"
@@ -211,13 +212,7 @@ func (h *WorkspaceConfHandler) Export(ctx dsc.ResourceContext) ([]any, error) {
 	}
 
 	// Build a comma-separated list of known keys for a single API call.
-	var keysList string
-	for i, key := range knownKeys {
-		if i > 0 {
-			keysList += ","
-		}
-		keysList += key
-	}
+	keysList := strings.Join(knownKeys, ",")
 
 	result, err := w.WorkspaceConf.GetStatus(cmdCtx, settings.GetStatusRequest{
 		Keys: keysList,

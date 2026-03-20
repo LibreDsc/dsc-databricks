@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"reflect"
 
 	"github.com/LibreDsc/dsc-databricks/internal/dsc"
@@ -387,4 +388,24 @@ func getWorkspaceClient(ctx dsc.ResourceContext) (context.Context, *databricks.W
 	}
 
 	return cmdCtx, w, nil
+}
+
+func getAccountClient(ctx dsc.ResourceContext) (context.Context, *databricks.AccountClient, error) {
+	cmdCtx := ctx.Cmd.Context()
+	if cmdCtx == nil {
+		cmdCtx = context.Background()
+	}
+
+	var a *databricks.AccountClient
+	var err error
+	if host := os.Getenv("DATABRICKS_ACCOUNT_HOST"); host != "" {
+		a, err = databricks.NewAccountClient(&databricks.Config{Host: host})
+	} else {
+		a, err = databricks.NewAccountClient()
+	}
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create Databricks account client: %w", err)
+	}
+
+	return cmdCtx, a, nil
 }
