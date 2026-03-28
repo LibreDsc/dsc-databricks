@@ -1,0 +1,126 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+          - goos: windows
+            goarch: arm64
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Determine version
+        id: version
+        run: |
+          # Strip the leading 'v' from the tag for the version string.
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Build binary
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          CGO_ENABLED: "0"
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          BINARY="dsc-databricks"
+          if [ "${GOOS}" = "windows" ]; then
+            BINARY="dsc-databricks.exe"
+          fi
+
+          go build -trimpath \
+            -ldflags="-s -w -X github.com/LibreDsc/dsc-databricks/internal/build.Version=${VERSION}" \
+            -o "${BINARY}" ./cmd
+
+          ARCHIVE_BASE="dsc_databricks_${VERSION}_${GOOS}_${GOARCH}"
+
+          if [ "${GOOS}" = "windows" ]; then
+            zip -q "${ARCHIVE_BASE}.zip" "${BINARY}"
+          else
+            tar -czf "${ARCHIVE_BASE}.tar.gz" "${BINARY}"
+          fi
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsc_databricks_${{ steps.version.outputs.version }}_${{ matrix.goos }}_${{ matrix.goarch }}
+          path: |
+            dsc_databricks_*.tar.gz
+            dsc_databricks_*.zip
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Determine version
+        id: version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums
+        working-directory: dist
+        run: |
+          sha256sum dsc_databricks_* > "dsc_databricks_${{ steps.version.outputs.version }}_SHA256SUMS"
+
+      - name: Extract release notes from CHANGELOG.md
+        id: notes
+        run: |
+          # Extract the section for this release version from CHANGELOG.md.
+          # Matches from "## Release vX.Y.Z" until the next "## Release" or EOF.
+          VERSION="${{ steps.version.outputs.version }}"
+          NOTES=$(sed -n "/^## Release v${VERSION} /,/^## Release v/{/^## Release v${VERSION} /p; /^## Release v${VERSION} /!{/^## Release v/!p}}" CHANGELOG.md)
+
+          if [ -z "$NOTES" ]; then
+            NOTES="Release ${GITHUB_REF_NAME}"
+          fi
+
+          # Write to file to preserve newlines.
+          echo "$NOTES" > release_notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          body_path: release_notes.md
+          files: dist/*

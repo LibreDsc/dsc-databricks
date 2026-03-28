@@ -65,7 +65,9 @@ jobs:
           BINARY="dsc-databricks.exe"
         fi
 
-        go build -trimpath -ldflags="-s -w" -o "${BINARY}" ./cmd
+        go build -trimpath \
+          -ldflags="-s -w -X github.com/LibreDsc/dsc-databricks/internal/build.Version=${VERSION}" \
+          -o "${BINARY}" ./cmd
 
         ARCHIVE_BASE="dsc_databricks_${VERSION}_${GOOS}_${GOARCH}"
 

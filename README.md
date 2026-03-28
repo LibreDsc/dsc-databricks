@@ -11,81 +11,30 @@ This CLI can be added downloaded as executable in any directory and added to
 the PATH environment variable. Check out the latest available releases and
 the wiki for more information how the CLI works.
 
-## Authentication
+## Releases
 
-`dsc-databricks` uses [Databricks unified authentication][00] via the Databricks
-SDK for Go. Read the documentation to configure credentials **before** running
-any commands.
+For each merge to the `main` branch, build artifacts are produced
+automatically. Periodically a release version tag will be pushed which will
+create a full [GitHub Release][00]
+with binaries for all supported platforms.
 
-### Option 1: Environment variables
+## Contributing
 
-Set the following environment variables:
+Please check out the [Contributing to dsc-databricks][01]
+guidelines.
 
-```bash
-export DATABRICKS_HOST="https://<workspace-id>.cloud.databricks.com"
-export DATABRICKS_TOKEN="dapi..."
-```
+## Change log
 
-For service principal OAuth (M2M), use:
+A full list of changes in each version can be found in the
+[change log][02].
 
-```bash
-export DATABRICKS_HOST="https://<workspace-id>.cloud.databricks.com"
-export DATABRICKS_CLIENT_ID="<client-id>"
-export DATABRICKS_CLIENT_SECRET="<client-secret>"
-```
+## Documentation
 
-### Option 2: Configuration profile
+The documentation can be found in the
+[dsc-databricks Wiki][03].
 
-Create or edit `~/.databrickscfg`:
-
-```ini
-[DEFAULT]
-host  = https://<workspace-id>.cloud.databricks.com
-token = dapi...
-```
-
-To use a named profile, set the `DATABRICKS_CONFIG_PROFILE` environment
-variable:
-
-```bash
-export DATABRICKS_CONFIG_PROFILE="my-profile"
-```
-
-### Option 3: Azure CLI (Cloud-specific)
-
-If you are running on Azure, you can authenticate using the Azure CLI:
-
-```bash
-az login
-export DATABRICKS_HOST="https://<workspace-id>.azuredatabricks.net"
-```
-
-The SDK will automatically pick up the Azure CLI credentials.
-
-### Verify authentication
-
-Run a quick `export` command to confirm your credentials are working:
-
-```bash
-dsc-databricks export --resource LibreDsc.Databricks/User
-```
-
-## Building
-
-The project has a simple build automation script that can be run using
-PowerShell 7+:
-
-```powershell
-# Build the project and produce resource manifest
-.\build.ps1
-
-# Build and test (requires $env:DATABRICKS_HOST and $env:DATABRICKS_TOKEN set)
-\.build.ps1 -RunTests
-```
-
-## License
-
-See [LICENSE](LICENSE) for details.
-
-<!-- Link reference definitions -->
-[00]: https://docs.databricks.com/en/dev-tools/auth/unified-auth.html
+<!-- Link references -->
+[00]: https://github.com/LibreDsc/dsc-databricks/releases
+[01]: CONTRIBUTING.md
+[02]: CHANGELOG.md
+[03]: https://github.com/LibreDsc/dsc-databricks/wiki

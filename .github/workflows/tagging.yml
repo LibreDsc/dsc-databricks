@@ -1,0 +1,28 @@
+name: Create Release Tag
+
+on:
+  workflow_dispatch:
+
+# Ensure only one tagging run at a time.
+concurrency:
+  group: tagging
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Run tagging script
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: uv run --script scripts/tagging.py
