@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD012 -->
 # Version changelog
 
 ## Release v0.2.0 (2026-03-28)
@@ -6,7 +7,6 @@
 
 - Switched release tagging to use a Personal Access Token
   to ensure downstream release workflows trigger correctly.
-
 
 ## Release v0.1.0 (2026-03-28)
 
@@ -50,4 +50,3 @@
 ### Dependency Updates
 
 - Databricks SDK for Go v0.118.0.
-
