@@ -23,6 +23,6 @@ jobs:
 
       - name: Run tagging script
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: uv run --script scripts/tagging.py
