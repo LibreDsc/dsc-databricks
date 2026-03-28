@@ -6,4 +6,7 @@
 
 ### Bug Fixes
 
+- Switched release tagging to use a Personal Access Token
+  to ensure downstream release workflows trigger correctly.
+
 ### Dependency Updates
