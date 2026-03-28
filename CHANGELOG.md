@@ -1,5 +1,13 @@
 # Version changelog
 
+## Release v0.2.0 (2026-03-28)
+
+### Bug Fixes
+
+- Switched release tagging to use a Personal Access Token
+  to ensure downstream release workflows trigger correctly.
+
+
 ## Release v0.1.0 (2026-03-28)
 
 ### Notable Changes
