@@ -31,6 +31,6 @@ const (
 
 // Client initialization messages.
 const (
-	MsgCreatingWorkspaceClient = "creating Databricks workspace client"
-	MsgCreatingAccountClient   = "creating Databricks account client"
+	MsgCreatingWorkspaceClient = "Creating Databricks workspace client"
+	MsgCreatingAccountClient   = "Creating Databricks account client"
 )
