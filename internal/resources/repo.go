@@ -81,8 +81,10 @@ func (h *RepoHandler) getByPath(ctx dsc.ResourceContext, path string) (RepoState
 		return RepoState{Path: path, Exist: false}, err
 	}
 
+	dsc.Logger.Debugf(dsc.MsgLookup, "Repo", "path="+path)
 	info, err := w.Repos.GetByPath(cmdCtx, path)
 	if err != nil {
+		dsc.Logger.Infof(dsc.MsgNotFound, "Repo", "path="+path)
 		return RepoState{Path: path, Exist: false}, nil
 	}
 	return repoInfoToState(info), nil
@@ -131,6 +133,7 @@ func (h *RepoHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.
 	}
 
 	if !beforeState.Exist {
+		dsc.Logger.Infof(dsc.MsgCreate, "Repo", "path="+req.Path)
 		if err := dsc.ValidateRequired(
 			dsc.RequiredField{Name: "url", Value: req.URL},
 			dsc.RequiredField{Name: "provider", Value: req.Provider},
@@ -177,6 +180,7 @@ func (h *RepoHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.
 	}
 
 	// Repo already exists — update the branch if requested and different.
+	dsc.Logger.Infof(dsc.MsgUpdate, "Repo", "path="+req.Path)
 	afterState := beforeState
 	if req.Branch != "" && req.Branch != beforeState.Branch {
 		if err := w.Repos.Update(cmdCtx, workspace.UpdateRepoRequest{
@@ -243,6 +247,7 @@ func (h *RepoHandler) Delete(ctx dsc.ResourceContext, input json.RawMessage) err
 		return nil
 	}
 
+	dsc.Logger.Debugf(dsc.MsgDelete, "Repo", "path="+req.Path)
 	cmdCtx, w, err := getWorkspaceClient(ctx)
 	if err != nil {
 		return err
@@ -257,6 +262,7 @@ func (h *RepoHandler) Export(ctx dsc.ResourceContext) ([]any, error) {
 		return nil, err
 	}
 
+	dsc.Logger.Debugf(dsc.MsgListAll, "Repo")
 	repos, err := w.Repos.ListAll(cmdCtx, workspace.ListReposRequest{})
 	if err != nil {
 		return nil, err

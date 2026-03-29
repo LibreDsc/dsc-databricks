@@ -83,20 +83,24 @@ func (h *ServicePrincipalHandler) getCurrentState(ctx dsc.ResourceContext, req *
 	}
 
 	if req.ID != "" {
+		dsc.Logger.Debugf(dsc.MsgLookup, "ServicePrincipal", "id="+req.ID)
 		sp, err := w.ServicePrincipalsV2.Get(cmdCtx, iam.GetServicePrincipalRequest{Id: req.ID})
 		if err != nil {
+			dsc.Logger.Infof(dsc.MsgNotFound, "ServicePrincipal", "id="+req.ID)
 			return ServicePrincipalState{Exist: false}, nil
 		}
 		return spToState(sp), nil
 	}
 
 	if req.DisplayName != "" {
+		dsc.Logger.Debugf(dsc.MsgLookup, "ServicePrincipal", "display_name="+req.DisplayName)
 		sps := w.ServicePrincipalsV2.List(cmdCtx, iam.ListServicePrincipalsRequest{
 			Filter: "displayName eq \"" + req.DisplayName + "\"",
 		})
 
 		sp, err := sps.Next(cmdCtx)
 		if err != nil {
+			dsc.Logger.Infof(dsc.MsgNotFound, "ServicePrincipal", "display_name="+req.DisplayName)
 			return ServicePrincipalState{DisplayName: req.DisplayName, Exist: false}, nil
 		}
 		return spToState(&sp), nil
@@ -133,6 +137,7 @@ func (h *ServicePrincipalHandler) Set(ctx dsc.ResourceContext, input json.RawMes
 	}
 
 	if beforeState.Exist {
+		dsc.Logger.Infof(dsc.MsgUpdate, "ServicePrincipal", "id="+beforeState.ID)
 		// Service principal already exists — GET the full object, overlay desired
 		// fields, then PUT back via Update (SCIM PUT requires the complete representation).
 		full, err := w.ServicePrincipalsV2.Get(cmdCtx, iam.GetServicePrincipalRequest{Id: beforeState.ID})
@@ -171,6 +176,7 @@ func (h *ServicePrincipalHandler) Set(ctx dsc.ResourceContext, input json.RawMes
 		}
 		schemaInput.ID = beforeState.ID
 	} else if schemaInput.DisplayName != "" {
+		dsc.Logger.Infof(dsc.MsgCreate, "ServicePrincipal", "display_name="+schemaInput.DisplayName)
 		// Service principal does not exist — create it.
 		created, err := w.ServicePrincipalsV2.Create(cmdCtx, iam.CreateServicePrincipalRequest{
 			DisplayName:   schemaInput.DisplayName,
@@ -243,10 +249,12 @@ func (h *ServicePrincipalHandler) Delete(ctx dsc.ResourceContext, input json.Raw
 	}
 
 	if schemaInput.ID != "" {
+		dsc.Logger.Debugf(dsc.MsgDelete, "ServicePrincipal", "id="+schemaInput.ID)
 		return w.ServicePrincipalsV2.Delete(cmdCtx, iam.DeleteServicePrincipalRequest{Id: schemaInput.ID})
 	}
 
 	if schemaInput.DisplayName != "" {
+		dsc.Logger.Debugf(dsc.MsgDelete, "ServicePrincipal", "display_name="+schemaInput.DisplayName)
 		sps := w.ServicePrincipalsV2.List(cmdCtx, iam.ListServicePrincipalsRequest{
 			Filter: "displayName eq \"" + schemaInput.DisplayName + "\"",
 		})
@@ -267,6 +275,7 @@ func (h *ServicePrincipalHandler) Export(ctx dsc.ResourceContext) ([]any, error)
 		return nil, err
 	}
 
+	dsc.Logger.Debugf(dsc.MsgListAll, "ServicePrincipal")
 	sps, err := w.ServicePrincipalsV2.ListAll(cmdCtx, iam.ListServicePrincipalsRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list service principals: %w", err)

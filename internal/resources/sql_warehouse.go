@@ -138,16 +138,20 @@ func (h *SqlWarehouseHandler) getCurrentState(ctx dsc.ResourceContext, req *SqlW
 	}
 
 	if req.ID != "" {
+		dsc.Logger.Debugf(dsc.MsgLookup, "SqlWarehouse", "id="+req.ID)
 		resp, err := w.Warehouses.GetById(cmdCtx, req.ID)
 		if err != nil {
+			dsc.Logger.Infof(dsc.MsgNotFound, "SqlWarehouse", "id="+req.ID)
 			return SqlWarehouseState{ID: req.ID, Exist: false}, nil
 		}
 		return warehouseResponseToState(resp), nil
 	}
 
 	if req.Name != "" {
+		dsc.Logger.Debugf(dsc.MsgLookup, "SqlWarehouse", "name="+req.Name)
 		info, err := w.Warehouses.GetByName(cmdCtx, req.Name)
 		if err != nil {
+			dsc.Logger.Infof(dsc.MsgNotFound, "SqlWarehouse", "name="+req.Name)
 			return SqlWarehouseState{Name: req.Name, Exist: false}, nil
 		}
 		return endpointInfoToState(info), nil
@@ -240,6 +244,7 @@ func (h *SqlWarehouseHandler) Set(ctx dsc.ResourceContext, input json.RawMessage
 	var afterState SqlWarehouseState
 
 	if beforeState.Exist {
+		dsc.Logger.Infof(dsc.MsgUpdate, "SqlWarehouse", "id="+beforeState.ID)
 		// Warehouse exists — edit it.
 		effectiveName := schemaInput.Name
 		if effectiveName == "" {
@@ -267,6 +272,7 @@ func (h *SqlWarehouseHandler) Set(ctx dsc.ResourceContext, input json.RawMessage
 		}
 		afterState = warehouseResponseToState(updated)
 	} else {
+		dsc.Logger.Infof(dsc.MsgCreate, "SqlWarehouse", "name="+schemaInput.Name)
 		// Warehouse does not exist — create it.
 		if err := dsc.ValidateRequired(
 			dsc.RequiredField{Name: "name", Value: schemaInput.Name},
@@ -357,6 +363,7 @@ func (h *SqlWarehouseHandler) Delete(ctx dsc.ResourceContext, input json.RawMess
 		return dsc.ValidateRequired(dsc.RequiredField{Name: "id or name", Value: ""})
 	}
 
+	dsc.Logger.Debugf(dsc.MsgDelete, "SqlWarehouse", "id="+warehouseID)
 	// Stop the warehouse first if it is running, then delete it.
 	resp, err := w.Warehouses.GetById(cmdCtx, warehouseID)
 	if err != nil {
@@ -389,6 +396,7 @@ func (h *SqlWarehouseHandler) Export(ctx dsc.ResourceContext) ([]any, error) {
 		return nil, err
 	}
 
+	dsc.Logger.Debugf(dsc.MsgListAll, "SqlWarehouse")
 	warehouses, err := w.Warehouses.ListAll(cmdCtx, sql.ListWarehousesRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list SQL warehouses: %w", err)

@@ -92,20 +92,24 @@ func (h *AccountUserHandler) getCurrentState(ctx dsc.ResourceContext, req *Accou
 	}
 
 	if req.ID != "" {
+		dsc.Logger.Debugf(dsc.MsgLookup, "AccountUser", "id="+req.ID)
 		user, err := a.UsersV2.Get(cmdCtx, iam.GetAccountUserRequest{Id: req.ID})
 		if err != nil {
+			dsc.Logger.Infof(dsc.MsgNotFound, "AccountUser", "id="+req.ID)
 			return AccountUserState{Exist: false}, nil
 		}
 		return accountUserToState(user), nil
 	}
 
 	if req.UserName != "" {
+		dsc.Logger.Debugf(dsc.MsgLookup, "AccountUser", "user_name="+req.UserName)
 		users := a.UsersV2.List(cmdCtx, iam.ListAccountUsersRequest{
 			Filter: "userName eq \"" + req.UserName + "\"",
 		})
 
 		user, err := users.Next(cmdCtx)
 		if err != nil {
+			dsc.Logger.Infof(dsc.MsgNotFound, "AccountUser", "user_name="+req.UserName)
 			return AccountUserState{UserName: req.UserName, Exist: false}, nil
 		}
 		return accountUserToState(&user), nil
@@ -128,6 +132,7 @@ func (h *AccountUserHandler) Set(ctx dsc.ResourceContext, input json.RawMessage)
 	}
 
 	if beforeState.Exist {
+		dsc.Logger.Infof(dsc.MsgUpdate, "AccountUser", "id="+beforeState.ID)
 		// User already exists — GET the full user, overlay desired fields, then PUT back.
 		fullUser, err := a.UsersV2.Get(cmdCtx, iam.GetAccountUserRequest{Id: beforeState.ID})
 		if err != nil {
@@ -149,6 +154,7 @@ func (h *AccountUserHandler) Set(ctx dsc.ResourceContext, input json.RawMessage)
 		}
 		schemaInput.ID = beforeState.ID
 	} else if schemaInput.UserName != "" {
+		dsc.Logger.Infof(dsc.MsgCreate, "AccountUser", "user_name="+schemaInput.UserName)
 		// User doesn't exist — create it.
 		if _, err := a.UsersV2.Create(cmdCtx, schemaInput.toCreateRequest()); err != nil {
 			return nil, err
@@ -211,10 +217,12 @@ func (h *AccountUserHandler) Delete(ctx dsc.ResourceContext, input json.RawMessa
 	}
 
 	if schemaInput.ID != "" {
+		dsc.Logger.Debugf(dsc.MsgDelete, "AccountUser", "id="+schemaInput.ID)
 		return a.UsersV2.Delete(cmdCtx, iam.DeleteAccountUserRequest{Id: schemaInput.ID})
 	}
 
 	if schemaInput.UserName != "" {
+		dsc.Logger.Debugf(dsc.MsgDelete, "AccountUser", "user_name="+schemaInput.UserName)
 		users := a.UsersV2.List(cmdCtx, iam.ListAccountUsersRequest{
 			Filter: "userName eq \"" + schemaInput.UserName + "\"",
 		})
@@ -235,6 +243,7 @@ func (h *AccountUserHandler) Export(ctx dsc.ResourceContext) ([]any, error) {
 		return nil, err
 	}
 
+	dsc.Logger.Debugf(dsc.MsgListAll, "AccountUser")
 	users, err := a.UsersV2.ListAll(cmdCtx, iam.ListAccountUsersRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list account users: %w", err)

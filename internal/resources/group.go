@@ -79,14 +79,17 @@ func (h *GroupHandler) getCurrentState(ctx dsc.ResourceContext, req *GroupSchema
 	}
 
 	if req.ID != "" {
+		dsc.Logger.Debugf(dsc.MsgLookup, "Group", "id="+req.ID)
 		g, err := w.GroupsV2.Get(cmdCtx, iam.GetGroupRequest{Id: req.ID})
 		if err != nil {
+			dsc.Logger.Infof(dsc.MsgNotFound, "Group", "id="+req.ID)
 			return GroupState{Exist: false}, nil
 		}
 		return groupToState(g), nil
 	}
 
 	if req.DisplayName != "" {
+		dsc.Logger.Debugf(dsc.MsgLookup, "Group", "display_name="+req.DisplayName)
 		groups, err := w.GroupsV2.ListAll(cmdCtx, iam.ListGroupsRequest{})
 		if err != nil {
 			return GroupState{DisplayName: req.DisplayName, Exist: false}, nil
@@ -100,6 +103,7 @@ func (h *GroupHandler) getCurrentState(ctx dsc.ResourceContext, req *GroupSchema
 				return groupToState(full), nil
 			}
 		}
+		dsc.Logger.Infof(dsc.MsgNotFound, "Group", "display_name="+req.DisplayName)
 		return GroupState{DisplayName: req.DisplayName, Exist: false}, nil
 	}
 
@@ -136,6 +140,7 @@ func (h *GroupHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*dsc
 	var afterState GroupState
 
 	if beforeState.Exist {
+		dsc.Logger.Infof(dsc.MsgUpdate, "Group", "id="+beforeState.ID)
 		// Group exists — build an UpdateGroupRequest from desired state, overlaying
 		// onto the current full state so the SCIM PUT is complete.
 		full, err := w.GroupsV2.Get(cmdCtx, iam.GetGroupRequest{Id: beforeState.ID})
@@ -182,6 +187,7 @@ func (h *GroupHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*dsc
 		afterFull.Roles = update.Roles
 		afterState = groupToState(&afterFull)
 	} else if schemaInput.DisplayName != "" {
+		dsc.Logger.Infof(dsc.MsgCreate, "Group", "display_name="+schemaInput.DisplayName)
 		// Group does not exist — create it.
 		created, err := w.GroupsV2.Create(cmdCtx, iam.CreateGroupRequest{
 			DisplayName:  schemaInput.DisplayName,
@@ -252,10 +258,12 @@ func (h *GroupHandler) Delete(ctx dsc.ResourceContext, input json.RawMessage) er
 	}
 
 	if schemaInput.ID != "" {
+		dsc.Logger.Debugf(dsc.MsgDelete, "Group", "id="+schemaInput.ID)
 		return w.GroupsV2.Delete(cmdCtx, iam.DeleteGroupRequest{Id: schemaInput.ID})
 	}
 
 	if schemaInput.DisplayName != "" {
+		dsc.Logger.Debugf(dsc.MsgDelete, "Group", "display_name="+schemaInput.DisplayName)
 		groups, err := w.GroupsV2.ListAll(cmdCtx, iam.ListGroupsRequest{})
 		if err != nil {
 			return dsc.NotFoundError("group", "display_name="+schemaInput.DisplayName)
@@ -277,6 +285,7 @@ func (h *GroupHandler) Export(ctx dsc.ResourceContext) ([]any, error) {
 		return nil, err
 	}
 
+	dsc.Logger.Debugf(dsc.MsgListAll, "Group")
 	groups, err := w.GroupsV2.ListAll(cmdCtx, iam.ListGroupsRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list groups: %w", err)

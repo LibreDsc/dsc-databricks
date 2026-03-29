@@ -89,16 +89,20 @@ func (h *ClusterPolicyHandler) getCurrentState(ctx dsc.ResourceContext, req *Clu
 	}
 
 	if req.PolicyID != "" {
+		dsc.Logger.Debugf(dsc.MsgLookup, "ClusterPolicy", "policy_id="+req.PolicyID)
 		p, err := w.ClusterPolicies.Get(cmdCtx, compute.GetClusterPolicyRequest{PolicyId: req.PolicyID})
 		if err != nil {
+			dsc.Logger.Infof(dsc.MsgNotFound, "ClusterPolicy", "policy_id="+req.PolicyID)
 			return ClusterPolicyState{Exist: false}, nil
 		}
 		return policyToState(p), nil
 	}
 
 	if req.Name != "" {
+		dsc.Logger.Debugf(dsc.MsgLookup, "ClusterPolicy", "name="+req.Name)
 		p, err := w.ClusterPolicies.GetByName(cmdCtx, req.Name)
 		if err != nil {
+			dsc.Logger.Infof(dsc.MsgNotFound, "ClusterPolicy", "name="+req.Name)
 			return ClusterPolicyState{Name: req.Name, Exist: false}, nil
 		}
 		return policyToState(p), nil
@@ -150,6 +154,7 @@ func (h *ClusterPolicyHandler) Set(ctx dsc.ResourceContext, input json.RawMessag
 	var afterState ClusterPolicyState
 
 	if beforeState.Exist {
+		dsc.Logger.Infof(dsc.MsgUpdate, "ClusterPolicy", "policy_id="+beforeState.PolicyID)
 		// Policy exists — edit it.
 		if err := w.ClusterPolicies.Edit(cmdCtx, compute.EditPolicy{
 			PolicyId:                       beforeState.PolicyID,
@@ -169,6 +174,7 @@ func (h *ClusterPolicyHandler) Set(ctx dsc.ResourceContext, input json.RawMessag
 		}
 		afterState = policyToState(updated)
 	} else {
+		dsc.Logger.Infof(dsc.MsgCreate, "ClusterPolicy", "name="+effectiveName)
 		// Policy does not exist — create it.
 		resp, err := w.ClusterPolicies.Create(cmdCtx, compute.CreatePolicy{
 			Name:                           effectiveName,
@@ -243,10 +249,12 @@ func (h *ClusterPolicyHandler) Delete(ctx dsc.ResourceContext, input json.RawMes
 	}
 
 	if schemaInput.PolicyID != "" {
+		dsc.Logger.Debugf(dsc.MsgDelete, "ClusterPolicy", "policy_id="+schemaInput.PolicyID)
 		return w.ClusterPolicies.Delete(cmdCtx, compute.DeletePolicy{PolicyId: schemaInput.PolicyID})
 	}
 
 	if schemaInput.Name != "" {
+		dsc.Logger.Debugf(dsc.MsgDelete, "ClusterPolicy", "name="+schemaInput.Name)
 		p, err := w.ClusterPolicies.GetByName(cmdCtx, schemaInput.Name)
 		if err != nil {
 			return dsc.NotFoundError("cluster policy", "name="+schemaInput.Name)
@@ -263,6 +271,7 @@ func (h *ClusterPolicyHandler) Export(ctx dsc.ResourceContext) ([]any, error) {
 		return nil, err
 	}
 
+	dsc.Logger.Debugf(dsc.MsgListAll, "ClusterPolicy")
 	policies, err := w.ClusterPolicies.ListAll(cmdCtx, compute.ListClusterPoliciesRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list cluster policies: %w", err)
