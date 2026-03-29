@@ -150,16 +150,20 @@ func (h *ClusterHandler) getCurrentState(ctx dsc.ResourceContext, req *ClusterSc
 	}
 
 	if req.ClusterID != "" {
+		dsc.Logger.Debugf("Cluster: looking up by cluster_id=%s", req.ClusterID)
 		c, err := w.Clusters.GetByClusterId(cmdCtx, req.ClusterID)
 		if err != nil {
+			dsc.Logger.Infof("Cluster: not found by cluster_id=%s", req.ClusterID)
 			return ClusterState{ClusterID: req.ClusterID, Exist: false}, nil
 		}
 		return clusterToState(c), nil
 	}
 
 	if req.ClusterName != "" {
+		dsc.Logger.Debugf("Cluster: looking up by cluster_name=%s", req.ClusterName)
 		c, err := w.Clusters.GetByClusterName(cmdCtx, req.ClusterName)
 		if err != nil {
+			dsc.Logger.Infof("Cluster: not found by cluster_name=%s", req.ClusterName)
 			return ClusterState{ClusterName: req.ClusterName, Exist: false}, nil
 		}
 		return clusterToState(c), nil
@@ -269,6 +273,7 @@ func (h *ClusterHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*d
 	var afterState ClusterState
 
 	if beforeState.Exist {
+		dsc.Logger.Infof("Cluster: updating existing cluster id=%s", beforeState.ClusterID)
 		// Cluster exists — edit it. Edit requires the cluster to be RUNNING or TERMINATED.
 		effectiveName := schemaInput.ClusterName
 		if effectiveName == "" {
@@ -301,6 +306,7 @@ func (h *ClusterHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*d
 		}
 		afterState = clusterToState(updated)
 	} else {
+		dsc.Logger.Info("Cluster: creating new cluster")
 		// Cluster does not exist — create it.
 		if err := dsc.ValidateRequired(
 			dsc.RequiredField{Name: "cluster_name", Value: schemaInput.ClusterName},
@@ -431,6 +437,7 @@ func (h *ClusterHandler) Export(ctx dsc.ResourceContext) ([]any, error) {
 		return nil, err
 	}
 
+	dsc.Logger.Debug("Cluster: listing all clusters")
 	clusters, err := w.Clusters.ListAll(cmdCtx, compute.ListClustersRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list clusters: %w", err)

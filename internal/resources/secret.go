@@ -119,6 +119,7 @@ func (h *SecretHandler) Get(ctx dsc.ResourceContext, input json.RawMessage) (*ds
 		return nil, err
 	}
 
+	dsc.Logger.Debugf("Secret: looking up key=%s in scope=%s", req.Key, req.Scope)
 	secrets := w.Secrets.ListSecrets(cmdCtx, workspace.ListSecretsRequest{Scope: req.Scope})
 	for {
 		secret, err := secrets.Next(cmdCtx)
@@ -129,6 +130,7 @@ func (h *SecretHandler) Get(ctx dsc.ResourceContext, input json.RawMessage) (*ds
 			return &dsc.GetResult{ActualState: SecretState{Scope: req.Scope, Key: req.Key, Exist: true}}, nil
 		}
 	}
+	dsc.Logger.Infof("Secret: not found key=%s in scope=%s", req.Key, req.Scope)
 	return &dsc.GetResult{ActualState: SecretState{Scope: req.Scope, Key: req.Key, Exist: false}}, nil
 }
 
@@ -160,6 +162,7 @@ func (h *SecretHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*ds
 		return nil, err
 	}
 
+	dsc.Logger.Infof("Secret: putting secret key=%s in scope=%s", req.Key, req.Scope)
 	if err := w.Secrets.PutSecret(cmdCtx, req); err != nil {
 		return nil, err
 	}
@@ -281,6 +284,7 @@ func (h *SecretScopeHandler) Get(ctx dsc.ResourceContext, input json.RawMessage)
 		return nil, err
 	}
 
+	dsc.Logger.Debugf("SecretScope: looking up scope=%s", req.Scope)
 	scopes := w.Secrets.ListScopes(cmdCtx)
 	for {
 		scope, err := scopes.Next(cmdCtx)
@@ -321,9 +325,12 @@ func (h *SecretScopeHandler) Set(ctx dsc.ResourceContext, input json.RawMessage)
 	}
 
 	if !beforeState.Exist {
+		dsc.Logger.Infof("SecretScope: creating scope=%s", req.Scope)
 		if err := w.Secrets.CreateScope(cmdCtx, req); err != nil {
 			return nil, err
 		}
+	} else {
+		dsc.Logger.Debugf("SecretScope: scope=%s already exists", req.Scope)
 	}
 
 	afterResult, _ := h.Get(ctx, input)

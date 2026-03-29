@@ -149,20 +149,24 @@ func (h *UserHandler) getCurrentState(ctx dsc.ResourceContext, req *UserSchemaIn
 	}
 
 	if req.ID != "" {
+		dsc.Logger.Debugf("User: looking up by id=%s", req.ID)
 		user, err := w.UsersV2.Get(cmdCtx, iam.GetUserRequest{Id: req.ID})
 		if err != nil {
+			dsc.Logger.Infof("User: not found by id=%s", req.ID)
 			return UserState{Exist: false}, nil
 		}
 		return userToState(user), nil
 	}
 
 	if req.UserName != "" {
+		dsc.Logger.Debugf("User: looking up by user_name=%s", req.UserName)
 		users := w.UsersV2.List(cmdCtx, iam.ListUsersRequest{
 			Filter: "userName eq \"" + req.UserName + "\"",
 		})
 
 		user, err := users.Next(cmdCtx)
 		if err != nil {
+			dsc.Logger.Infof("User: not found by user_name=%s", req.UserName)
 			return UserState{UserName: req.UserName, Exist: false}, nil
 		}
 		return userToState(&user), nil
@@ -185,6 +189,7 @@ func (h *UserHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.
 	}
 
 	if beforeState.Exist {
+		dsc.Logger.Infof("User: updating existing user id=%s", beforeState.ID)
 		// User already exists — GET the full user, overlay desired fields, then PUT back.
 		// SCIM PUT requires the complete user representation including schemas, emails, etc.
 		fullUser, err := w.UsersV2.Get(cmdCtx, iam.GetUserRequest{Id: beforeState.ID})
@@ -210,6 +215,7 @@ func (h *UserHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.
 		}
 		schemaInput.ID = beforeState.ID
 	} else if schemaInput.UserName != "" {
+		dsc.Logger.Infof("User: creating new user user_name=%s", schemaInput.UserName)
 		// User doesn't exist — create it.
 		if _, err := w.UsersV2.Create(cmdCtx, schemaInput.toCreateRequest()); err != nil {
 			return nil, err
@@ -297,6 +303,7 @@ func (h *UserHandler) Export(ctx dsc.ResourceContext) ([]any, error) {
 		return nil, err
 	}
 
+	dsc.Logger.Debug("User: listing all users")
 	users, err := w.UsersV2.ListAll(cmdCtx, iam.ListUsersRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list users: %w", err)
@@ -382,6 +389,7 @@ func getWorkspaceClient(ctx dsc.ResourceContext) (context.Context, *databricks.W
 		cmdCtx = context.Background()
 	}
 
+	dsc.Logger.Debug("creating Databricks workspace client")
 	w, err := databricks.NewWorkspaceClient()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create Databricks client: %w", err)
