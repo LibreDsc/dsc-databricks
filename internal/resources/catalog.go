@@ -107,8 +107,10 @@ func (h *CatalogHandler) getCurrentState(ctx dsc.ResourceContext, name string) (
 		return CatalogState{Exist: false}, err
 	}
 
+	dsc.Logger.Debugf(dsc.MsgLookup, "Catalog", "name="+name)
 	c, err := w.Catalogs.GetByName(cmdCtx, name)
 	if err != nil {
+		dsc.Logger.Infof(dsc.MsgNotFound, "Catalog", "name="+name)
 		return CatalogState{Name: name, Exist: false}, nil
 	}
 
@@ -151,6 +153,7 @@ func (h *CatalogHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*d
 	var afterCatalog *catalog.CatalogInfo
 
 	if beforeState.Exist {
+		dsc.Logger.Infof(dsc.MsgUpdate, "Catalog", "name="+req.Name)
 		// Catalog exists — update it.
 		updated, err := w.Catalogs.Update(cmdCtx, catalog.UpdateCatalog{
 			Name:                        req.Name,
@@ -166,6 +169,7 @@ func (h *CatalogHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*d
 		}
 		afterCatalog = updated
 	} else {
+		dsc.Logger.Infof(dsc.MsgCreate, "Catalog", "name="+req.Name)
 		// Catalog does not exist — create it.
 		created, err := w.Catalogs.Create(cmdCtx, catalog.CreateCatalog{
 			Name:           req.Name,
@@ -244,6 +248,7 @@ func (h *CatalogHandler) Delete(ctx dsc.ResourceContext, input json.RawMessage) 
 		return err
 	}
 
+	dsc.Logger.Debugf(dsc.MsgDelete, "Catalog", "name="+req.Name)
 	return w.Catalogs.Delete(cmdCtx, catalog.DeleteCatalogRequest{
 		Name:  req.Name,
 		Force: true,
@@ -256,6 +261,7 @@ func (h *CatalogHandler) Export(ctx dsc.ResourceContext) ([]any, error) {
 		return nil, err
 	}
 
+	dsc.Logger.Debugf(dsc.MsgListAll, "Catalog")
 	catalogs, err := w.Catalogs.ListAll(cmdCtx, catalog.ListCatalogsRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list catalogs: %w", err)

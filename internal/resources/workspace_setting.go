@@ -503,6 +503,8 @@ func (h *WorkspaceSettingHandler) getCurrentState(ctx dsc.ResourceContext, setti
 		return WorkspaceSettingState{SettingName: settingName, Exist: false}, err
 	}
 
+	dsc.Logger.Debugf(dsc.MsgLookup, "WorkspaceSetting", "setting_name="+settingName)
+
 	value, etag, err := def.get(cmdCtx, w)
 	if err != nil {
 		// Settings always exist on a workspace; an error here is a real error
@@ -571,6 +573,7 @@ func (h *WorkspaceSettingHandler) Set(ctx dsc.ResourceContext, input json.RawMes
 	}
 
 	// Update the setting value using the etag for optimistic concurrency.
+	dsc.Logger.Infof(dsc.MsgUpdate, "WorkspaceSetting", "setting_name="+schemaInput.SettingName)
 	if err := def.update(cmdCtx, w, schemaInput.Value, etag); err != nil {
 		return nil, fmt.Errorf("failed to update setting %q: %w", schemaInput.SettingName, err)
 	}
@@ -641,7 +644,7 @@ func (h *WorkspaceSettingHandler) Export(ctx dsc.ResourceContext) ([]any, error)
 		state, err := h.getCurrentState(ctx, name)
 		if err != nil {
 			// Skip settings where we don't have permission.
-			dsc.Logger.Infof("skipping setting %s: %s", name, err)
+			dsc.Logger.Infof(dsc.MsgSkipping, "WorkspaceSetting", name, err)
 			continue
 		}
 		all = append(all, state)

@@ -150,16 +150,20 @@ func (h *ClusterHandler) getCurrentState(ctx dsc.ResourceContext, req *ClusterSc
 	}
 
 	if req.ClusterID != "" {
+		dsc.Logger.Debugf(dsc.MsgLookup, "Cluster", "cluster_id="+req.ClusterID)
 		c, err := w.Clusters.GetByClusterId(cmdCtx, req.ClusterID)
 		if err != nil {
+			dsc.Logger.Infof(dsc.MsgNotFound, "Cluster", "cluster_id="+req.ClusterID)
 			return ClusterState{ClusterID: req.ClusterID, Exist: false}, nil
 		}
 		return clusterToState(c), nil
 	}
 
 	if req.ClusterName != "" {
+		dsc.Logger.Debugf(dsc.MsgLookup, "Cluster", "cluster_name="+req.ClusterName)
 		c, err := w.Clusters.GetByClusterName(cmdCtx, req.ClusterName)
 		if err != nil {
+			dsc.Logger.Infof(dsc.MsgNotFound, "Cluster", "cluster_name="+req.ClusterName)
 			return ClusterState{ClusterName: req.ClusterName, Exist: false}, nil
 		}
 		return clusterToState(c), nil
@@ -269,6 +273,7 @@ func (h *ClusterHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*d
 	var afterState ClusterState
 
 	if beforeState.Exist {
+		dsc.Logger.Infof(dsc.MsgUpdate, "Cluster", "cluster_id="+beforeState.ClusterID)
 		// Cluster exists — edit it. Edit requires the cluster to be RUNNING or TERMINATED.
 		effectiveName := schemaInput.ClusterName
 		if effectiveName == "" {
@@ -301,6 +306,7 @@ func (h *ClusterHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*d
 		}
 		afterState = clusterToState(updated)
 	} else {
+		dsc.Logger.Infof(dsc.MsgCreate, "Cluster", "cluster_name="+schemaInput.ClusterName)
 		// Cluster does not exist — create it.
 		if err := dsc.ValidateRequired(
 			dsc.RequiredField{Name: "cluster_name", Value: schemaInput.ClusterName},
@@ -387,6 +393,7 @@ func (h *ClusterHandler) Delete(ctx dsc.ResourceContext, input json.RawMessage) 
 
 	clusterID := schemaInput.ClusterID
 	if clusterID == "" && schemaInput.ClusterName != "" {
+		dsc.Logger.Debugf(dsc.MsgDelete, "Cluster", "cluster_name="+schemaInput.ClusterName)
 		c, lookupErr := w.Clusters.GetByClusterName(cmdCtx, schemaInput.ClusterName)
 		if lookupErr != nil {
 			return dsc.NotFoundError("cluster", "cluster_name="+schemaInput.ClusterName)
@@ -398,6 +405,7 @@ func (h *ClusterHandler) Delete(ctx dsc.ResourceContext, input json.RawMessage) 
 		return dsc.ValidateRequired(dsc.RequiredField{Name: "cluster_id or cluster_name", Value: ""})
 	}
 
+	dsc.Logger.Debugf(dsc.MsgDelete, "Cluster", "cluster_id="+clusterID)
 	// Terminate the cluster first if it is running, then permanently delete
 	// it so it no longer appears in the workspace.
 	cluster, err := w.Clusters.GetByClusterId(cmdCtx, clusterID)
@@ -431,6 +439,7 @@ func (h *ClusterHandler) Export(ctx dsc.ResourceContext) ([]any, error) {
 		return nil, err
 	}
 
+	dsc.Logger.Debugf(dsc.MsgListAll, "Cluster")
 	clusters, err := w.Clusters.ListAll(cmdCtx, compute.ListClustersRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list clusters: %w", err)

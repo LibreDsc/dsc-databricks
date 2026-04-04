@@ -149,20 +149,24 @@ func (h *UserHandler) getCurrentState(ctx dsc.ResourceContext, req *UserSchemaIn
 	}
 
 	if req.ID != "" {
+		dsc.Logger.Debugf(dsc.MsgLookup, "User", "id="+req.ID)
 		user, err := w.UsersV2.Get(cmdCtx, iam.GetUserRequest{Id: req.ID})
 		if err != nil {
+			dsc.Logger.Infof(dsc.MsgNotFound, "User", "id="+req.ID)
 			return UserState{Exist: false}, nil
 		}
 		return userToState(user), nil
 	}
 
 	if req.UserName != "" {
+		dsc.Logger.Debugf(dsc.MsgLookup, "User", "user_name="+req.UserName)
 		users := w.UsersV2.List(cmdCtx, iam.ListUsersRequest{
 			Filter: "userName eq \"" + req.UserName + "\"",
 		})
 
 		user, err := users.Next(cmdCtx)
 		if err != nil {
+			dsc.Logger.Infof(dsc.MsgNotFound, "User", "user_name="+req.UserName)
 			return UserState{UserName: req.UserName, Exist: false}, nil
 		}
 		return userToState(&user), nil
@@ -185,6 +189,7 @@ func (h *UserHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.
 	}
 
 	if beforeState.Exist {
+		dsc.Logger.Infof(dsc.MsgUpdate, "User", "id="+beforeState.ID)
 		// User already exists — GET the full user, overlay desired fields, then PUT back.
 		// SCIM PUT requires the complete user representation including schemas, emails, etc.
 		fullUser, err := w.UsersV2.Get(cmdCtx, iam.GetUserRequest{Id: beforeState.ID})
@@ -210,6 +215,7 @@ func (h *UserHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.
 		}
 		schemaInput.ID = beforeState.ID
 	} else if schemaInput.UserName != "" {
+		dsc.Logger.Infof(dsc.MsgCreate, "User", "user_name="+schemaInput.UserName)
 		// User doesn't exist — create it.
 		if _, err := w.UsersV2.Create(cmdCtx, schemaInput.toCreateRequest()); err != nil {
 			return nil, err
@@ -273,10 +279,12 @@ func (h *UserHandler) Delete(ctx dsc.ResourceContext, input json.RawMessage) err
 	}
 
 	if schemaInput.ID != "" {
+		dsc.Logger.Debugf(dsc.MsgDelete, "User", "id="+schemaInput.ID)
 		return w.UsersV2.Delete(cmdCtx, iam.DeleteUserRequest{Id: schemaInput.ID})
 	}
 
 	if schemaInput.UserName != "" {
+		dsc.Logger.Debugf(dsc.MsgDelete, "User", "user_name="+schemaInput.UserName)
 		users := w.UsersV2.List(cmdCtx, iam.ListUsersRequest{
 			Filter: "userName eq \"" + schemaInput.UserName + "\"",
 		})
@@ -297,6 +305,7 @@ func (h *UserHandler) Export(ctx dsc.ResourceContext) ([]any, error) {
 		return nil, err
 	}
 
+	dsc.Logger.Debugf(dsc.MsgListAll, "User")
 	users, err := w.UsersV2.ListAll(cmdCtx, iam.ListUsersRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list users: %w", err)
@@ -382,6 +391,7 @@ func getWorkspaceClient(ctx dsc.ResourceContext) (context.Context, *databricks.W
 		cmdCtx = context.Background()
 	}
 
+	dsc.Logger.Debug(dsc.MsgCreatingWorkspaceClient)
 	w, err := databricks.NewWorkspaceClient()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create Databricks client: %w", err)
@@ -398,6 +408,7 @@ func getAccountClient(ctx dsc.ResourceContext) (context.Context, *databricks.Acc
 
 	var a *databricks.AccountClient
 	var err error
+	dsc.Logger.Debug(dsc.MsgCreatingAccountClient)
 	if host := os.Getenv("DATABRICKS_ACCOUNT_HOST"); host != "" {
 		a, err = databricks.NewAccountClient(&databricks.Config{Host: host})
 	} else {

@@ -90,6 +90,7 @@ func newGetCmd() *cobra.Command {
 		Long:         `Retrieves and returns the current state of a specified resource.`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			Logger.Infof(MsgCmdStarting, "get", resourceType)
 			handler, err := getResourceHandler(resourceType)
 			if err != nil {
 				return err
@@ -99,14 +100,16 @@ func newGetCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			Logger.Tracef(MsgCmdInput, "get", resourceType, string(jsonInput))
 
 			ctx := ResourceContext{Cmd: cmd}
 			result, err := handler.Get(ctx, jsonInput)
 			if err != nil {
-				Logger.Errorf("get failed for %s: %s", resourceType, err)
+				Logger.Errorf(MsgCmdFailed, "get", resourceType, err)
 				return err
 			}
 
+			Logger.Debugf(MsgCmdCompleted, "get", resourceType)
 			return renderJSON(ctx, result.ActualState)
 		},
 	}
@@ -131,6 +134,7 @@ func newSetCmd() *cobra.Command {
 		Long:         `Creates a new resource or updates an existing one to match the specified desired state.`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			Logger.Infof(MsgCmdStarting, "set", resourceType)
 			handler, err := getResourceHandler(resourceType)
 			if err != nil {
 				return err
@@ -140,15 +144,17 @@ func newSetCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			Logger.Tracef(MsgCmdInput, "set", resourceType, string(jsonInput))
 
 			ctx := ResourceContext{Cmd: cmd}
 			result, err := handler.Set(ctx, jsonInput)
 			if err != nil {
-				Logger.Errorf("set failed for %s: %s", resourceType, err)
+				Logger.Errorf(MsgCmdFailed, "set", resourceType, err)
 				return err
 			}
 
 			if result != nil {
+				Logger.Debugf(MsgSetCompleted, resourceType, result.ChangedProperties)
 				// DSC with stateAndDiff expects two JSON lines on stdout:
 				// Line 1: after state (resource instance)
 				// Line 2: changed properties array
@@ -161,6 +167,7 @@ func newSetCmd() *cobra.Command {
 				}
 				return renderJSON(ctx, changedProps)
 			}
+			Logger.Debugf(MsgSetNoChanges, resourceType)
 			return nil
 		},
 	}
@@ -185,6 +192,7 @@ func newDeleteCmd() *cobra.Command {
 		Long:         `Removes the specified resource.`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			Logger.Infof(MsgCmdStarting, "delete", resourceType)
 			handler, err := getResourceHandler(resourceType)
 			if err != nil {
 				return err
@@ -194,12 +202,14 @@ func newDeleteCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			Logger.Tracef(MsgCmdInput, "delete", resourceType, string(jsonInput))
 
 			ctx := ResourceContext{Cmd: cmd}
 			if err := handler.Delete(ctx, jsonInput); err != nil {
-				Logger.Errorf("delete failed for %s: %s", resourceType, err)
+				Logger.Errorf(MsgCmdFailed, "delete", resourceType, err)
 				return err
 			}
+			Logger.Debugf(MsgCmdCompleted, "delete", resourceType)
 			return nil
 		},
 	}
@@ -224,6 +234,7 @@ func newTestCmd() *cobra.Command {
 		Long:         `Tests whether a resource matches the specified desired state and reports any differences.`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			Logger.Infof(MsgCmdStarting, "test", resourceType)
 			handler, err := getResourceHandler(resourceType)
 			if err != nil {
 				return err
@@ -233,14 +244,16 @@ func newTestCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			Logger.Tracef(MsgCmdInput, "test", resourceType, string(jsonInput))
 
 			ctx := ResourceContext{Cmd: cmd}
 			result, err := handler.Test(ctx, jsonInput)
 			if err != nil {
-				Logger.Errorf("test failed for %s: %s", resourceType, err)
+				Logger.Errorf(MsgCmdFailed, "test", resourceType, err)
 				return err
 			}
 
+			Logger.Debugf(MsgTestCompleted, resourceType, result.InDesiredState)
 			// DSC with stateAndDiff expects two JSON lines on stdout:
 			// Line 1: actual state with _inDesiredState property
 			// Line 2: differing properties array
@@ -271,6 +284,7 @@ func newExportCmd() *cobra.Command {
 		Long:         `Lists and exports all resources of the specified type.`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			Logger.Infof(MsgCmdStarting, "export", resourceType)
 			handler, err := getResourceHandler(resourceType)
 			if err != nil {
 				return err
@@ -279,10 +293,11 @@ func newExportCmd() *cobra.Command {
 			ctx := ResourceContext{Cmd: cmd}
 			result, err := handler.Export(ctx)
 			if err != nil {
-				Logger.Errorf("export failed for %s: %s", resourceType, err)
+				Logger.Errorf(MsgCmdFailed, "export", resourceType, err)
 				return err
 			}
 
+			Logger.Debugf(MsgExportCompleted, resourceType, len(result))
 			// DSC expects one JSON object per line; it wraps each into
 			// {"type": ..., "properties": ...} for the export result.
 			for _, item := range result {

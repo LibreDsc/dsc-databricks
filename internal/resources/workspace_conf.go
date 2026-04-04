@@ -82,6 +82,8 @@ func (h *WorkspaceConfHandler) getCurrentState(ctx dsc.ResourceContext, key stri
 		return WorkspaceConfState{Key: key, Exist: false}, err
 	}
 
+	dsc.Logger.Debugf(dsc.MsgLookup, "WorkspaceConf", "key="+key)
+
 	result, err := w.WorkspaceConf.GetStatus(cmdCtx, settings.GetStatusRequest{
 		Keys: key,
 	})
@@ -95,6 +97,7 @@ func (h *WorkspaceConfHandler) getCurrentState(ctx dsc.ResourceContext, key stri
 
 	value, ok := (*result)[key]
 	if !ok {
+		dsc.Logger.Infof(dsc.MsgNotFound, "WorkspaceConf", "key="+key)
 		return WorkspaceConfState{Key: key, Exist: false}, nil
 	}
 
@@ -141,6 +144,7 @@ func (h *WorkspaceConfHandler) Set(ctx dsc.ResourceContext, input json.RawMessag
 	}
 
 	// Apply the new value.
+	dsc.Logger.Infof(dsc.MsgPut, "WorkspaceConf", "key="+schemaInput.Key)
 	cmdCtx, w, err := getWorkspaceClient(ctx)
 	if err != nil {
 		return nil, err
@@ -212,6 +216,7 @@ func (h *WorkspaceConfHandler) Export(ctx dsc.ResourceContext) ([]any, error) {
 	}
 
 	// Build a comma-separated list of known keys for a single API call.
+	dsc.Logger.Debugf(dsc.MsgListAll, "WorkspaceConf")
 	keysList := strings.Join(knownKeys, ",")
 
 	result, err := w.WorkspaceConf.GetStatus(cmdCtx, settings.GetStatusRequest{
