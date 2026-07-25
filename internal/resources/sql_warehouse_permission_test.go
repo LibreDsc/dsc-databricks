@@ -58,9 +58,9 @@ func TestPrincipalKey(t *testing.T) {
 
 func TestMatchesWarehousePrincipal(t *testing.T) {
 	tests := []struct {
+		req   SqlWarehousePermissionState
 		name  string
 		entry sql.WarehouseAccessControlResponse
-		req   SqlWarehousePermissionState
 		want  bool
 	}{
 		{
@@ -107,8 +107,8 @@ func TestMatchesWarehousePrincipal(t *testing.T) {
 func TestDirectWarehousePermissionLevel(t *testing.T) {
 	tests := []struct {
 		name  string
-		entry sql.WarehouseAccessControlResponse
 		want  string
+		entry sql.WarehouseAccessControlResponse
 	}{
 		{
 			name: "direct permission",

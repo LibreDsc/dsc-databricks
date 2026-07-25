@@ -11,9 +11,9 @@ import (
 func TestRequireFields(t *testing.T) {
 	tests := []struct {
 		name        string
+		wantMessage string
 		fields      []field
 		wantErr     bool
-		wantMessage string
 	}{
 		{
 			name:    "all present",

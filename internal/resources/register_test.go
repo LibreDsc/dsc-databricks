@@ -44,8 +44,8 @@ var expectedRequired = map[string][]string{
 // schemaDoc is the subset of the generated JSON Schema the tests assert on.
 type schemaDoc struct {
 	Properties           map[string]json.RawMessage `json:"properties"`
-	Required             []string                   `json:"required"`
 	AdditionalProperties *bool                      `json:"additionalProperties"`
+	Required             []string                   `json:"required"`
 }
 
 func newTestManager(t *testing.T) *dsc.Manager {
@@ -130,8 +130,8 @@ func TestManifestSchemas(t *testing.T) {
 				t.Fatalf("_exist property missing")
 			}
 			var exist struct {
-				Type    string `json:"type"`
 				Default *bool  `json:"default"`
+				Type    string `json:"type"`
 			}
 			if err := json.Unmarshal(existRaw, &exist); err != nil {
 				t.Fatalf("failed to unmarshal _exist: %v", err)
