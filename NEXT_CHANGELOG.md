@@ -40,3 +40,6 @@
 
 - Added `github.com/LibreDsc/dsc-go-rdk` v0.1.0; removed `spf13/cobra` and
   `spf13/pflag`. Go toolchain bumped to 1.26.
+- E2E test suites migrated to Pester v6 (`Invoke-Pester` now uses
+  `New-PesterConfiguration` with an explicit `tests/` path; CI installs
+  Pester 6.0.1).

@@ -93,7 +93,10 @@ if ($RunTests)
     }
 
     $env:DSC_RESOURCE_PATH = $outputPath
-    $failures = (Invoke-Pester -PassThru -ErrorAction Ignore).FailedCount
+    $pesterConfig = New-PesterConfiguration
+    $pesterConfig.Run.Path = Join-Path $PSScriptRoot 'tests'
+    $pesterConfig.Run.PassThru = $true
+    $failures = (Invoke-Pester -Configuration $pesterConfig -ErrorAction Ignore).FailedCount
 
     if ($databricksInstance -and $env:GITHUB_ACTIONS) {
         Remove-AzDatabricksWorkspace -ResourceGroupName $databricksInstance.ResourceGroupName -Name $databricksInstance.Name -AsJob -NoWait
