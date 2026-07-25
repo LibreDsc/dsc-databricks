@@ -67,19 +67,19 @@ func (h *ClusterPolicyHandler) Get(ctx context.Context, in ClusterPolicyState) (
 	}
 
 	if in.PolicyID != "" {
-		dsc.Logger.Debugf(MsgLookup, "ClusterPolicy", "policy_id="+in.PolicyID)
+		logDebugf(MsgLookup, "ClusterPolicy", "policy_id="+in.PolicyID)
 		p, err := w.ClusterPolicies.Get(ctx, compute.GetClusterPolicyRequest{PolicyId: in.PolicyID})
 		if err != nil {
-			dsc.Logger.Infof(MsgNotFound, "ClusterPolicy", "policy_id="+in.PolicyID)
+			logInfof(MsgNotFound, "ClusterPolicy", "policy_id="+in.PolicyID)
 			return dsc.NotFound(ClusterPolicyState{PolicyID: in.PolicyID}, "ClusterPolicy", "policy_id="+in.PolicyID)
 		}
 		return policyToState(p), nil
 	}
 
-	dsc.Logger.Debugf(MsgLookup, "ClusterPolicy", "name="+in.Name)
+	logDebugf(MsgLookup, "ClusterPolicy", "name="+in.Name)
 	p, err := w.ClusterPolicies.GetByName(ctx, in.Name)
 	if err != nil {
-		dsc.Logger.Infof(MsgNotFound, "ClusterPolicy", "name="+in.Name)
+		logInfof(MsgNotFound, "ClusterPolicy", "name="+in.Name)
 		return dsc.NotFound(ClusterPolicyState{Name: in.Name}, "ClusterPolicy", "name="+in.Name)
 	}
 	return policyToState(p), nil
@@ -107,7 +107,7 @@ func (h *ClusterPolicyHandler) Set(ctx context.Context, desired ClusterPolicySta
 	}
 
 	if current.ShouldExist() {
-		dsc.Logger.Infof(MsgUpdate, "ClusterPolicy", "policy_id="+current.PolicyID)
+		logInfof(MsgUpdate, "ClusterPolicy", "policy_id="+current.PolicyID)
 		if err := w.ClusterPolicies.Edit(ctx, compute.EditPolicy{
 			PolicyId:                        current.PolicyID,
 			Name:                            effectiveName,
@@ -127,7 +127,7 @@ func (h *ClusterPolicyHandler) Set(ctx context.Context, desired ClusterPolicySta
 		return policyToState(updated), nil
 	}
 
-	dsc.Logger.Infof(MsgCreate, "ClusterPolicy", "name="+effectiveName)
+	logInfof(MsgCreate, "ClusterPolicy", "name="+effectiveName)
 	if err := requireFields(field{"name", effectiveName}); err != nil {
 		return desired, err
 	}
@@ -150,6 +150,69 @@ func (h *ClusterPolicyHandler) Set(ctx context.Context, desired ClusterPolicySta
 	return policyToState(created), nil
 }
 
+// projectClusterPolicyCreate returns the state Set's create path would
+// produce. policy_id is computed by the server and stays empty.
+func projectClusterPolicyCreate(desired *ClusterPolicyState, effectiveName string) ClusterPolicyState {
+	projected := *desired
+	projected.Name = effectiveName
+	projected.PolicyID = ""
+	projected.SetExist(true)
+	return projected
+}
+
+// projectClusterPolicyUpdate mirrors compute.EditPolicy: the SDK omits empty
+// values, so non-empty desired fields win and the rest carry over from the
+// current state (which keeps policy_id).
+func projectClusterPolicyUpdate(desired, current *ClusterPolicyState, effectiveName string) ClusterPolicyState {
+	projected := *current
+	projected.Name = effectiveName
+	if desired.Definition != "" {
+		projected.Definition = desired.Definition
+	}
+	if desired.Description != "" {
+		projected.Description = desired.Description
+	}
+	if desired.PolicyFamilyID != "" {
+		projected.PolicyFamilyID = desired.PolicyFamilyID
+	}
+	if desired.PolicyFamilyDefinitionOverrides != "" {
+		projected.PolicyFamilyDefinitionOverrides = desired.PolicyFamilyDefinitionOverrides
+	}
+	if desired.MaxClustersPerUser > 0 {
+		projected.MaxClustersPerUser = desired.MaxClustersPerUser
+	}
+	projected.SetExist(true)
+	return projected
+}
+
+// SetWhatIf predicts the state Set would produce without touching the policy.
+func (h *ClusterPolicyHandler) SetWhatIf(ctx context.Context, desired ClusterPolicyState) (ClusterPolicyState, error) {
+	if err := requireAtLeastOne("policy_id or name", desired.PolicyID, desired.Name); err != nil {
+		return desired, err
+	}
+
+	current, err := h.Get(ctx, desired)
+	if err != nil {
+		return desired, err
+	}
+
+	effectiveName := desired.Name
+	if effectiveName == "" {
+		effectiveName = current.Name
+	}
+
+	if current.ShouldExist() {
+		logInfof(MsgWhatIfUpdate, "ClusterPolicy", "policy_id="+current.PolicyID)
+		return projectClusterPolicyUpdate(&desired, &current, effectiveName), nil
+	}
+
+	if err := requireFields(field{"name", effectiveName}); err != nil {
+		return desired, err
+	}
+	logInfof(MsgWhatIfCreate, "ClusterPolicy", "name="+effectiveName)
+	return projectClusterPolicyCreate(&desired, effectiveName), nil
+}
+
 func (h *ClusterPolicyHandler) Delete(ctx context.Context, in ClusterPolicyState) error {
 	if err := requireAtLeastOne("policy_id or name", in.PolicyID, in.Name); err != nil {
 		return err
@@ -161,15 +224,15 @@ func (h *ClusterPolicyHandler) Delete(ctx context.Context, in ClusterPolicyState
 	}
 
 	if in.PolicyID != "" {
-		dsc.Logger.Debugf(MsgDelete, "ClusterPolicy", "policy_id="+in.PolicyID)
+		logDebugf(MsgDelete, "ClusterPolicy", "policy_id="+in.PolicyID)
 		return w.ClusterPolicies.Delete(ctx, compute.DeletePolicy{PolicyId: in.PolicyID})
 	}
 
-	dsc.Logger.Debugf(MsgDelete, "ClusterPolicy", "name="+in.Name)
+	logDebugf(MsgDelete, "ClusterPolicy", "name="+in.Name)
 	p, err := w.ClusterPolicies.GetByName(ctx, in.Name)
 	if err != nil {
 		// Already absent — deleting a missing instance succeeds.
-		dsc.Logger.Infof(MsgNotFound, "ClusterPolicy", "name="+in.Name)
+		logInfof(MsgNotFound, "ClusterPolicy", "name="+in.Name)
 		return nil
 	}
 	return w.ClusterPolicies.Delete(ctx, compute.DeletePolicy{PolicyId: p.PolicyId})
@@ -181,7 +244,7 @@ func (h *ClusterPolicyHandler) Export(ctx context.Context, _ ClusterPolicyState)
 		return nil, err
 	}
 
-	dsc.Logger.Debugf(MsgListAll, "ClusterPolicy")
+	logDebugf(MsgListAll, "ClusterPolicy")
 	policies, err := w.ClusterPolicies.ListAll(ctx, compute.ListClusterPoliciesRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list cluster policies: %w", err)

@@ -3,6 +3,7 @@ package resources
 import (
 	"encoding/json"
 	"slices"
+	"strings"
 	"testing"
 
 	dsc "github.com/LibreDsc/dsc-go-rdk"
@@ -91,6 +92,17 @@ func TestManifestCapabilities(t *testing.T) {
 			}
 			if manifest.Export == nil {
 				t.Errorf("export method missing")
+			}
+
+			if manifest.WhatIf == nil {
+				t.Fatalf("whatIf method missing — all resources implement WhatIfSettable")
+			}
+			if manifest.WhatIf.Return != "stateAndDiff" {
+				t.Errorf("whatIf.return = %q, want stateAndDiff", manifest.WhatIf.Return)
+			}
+			whatIfArgs, err := json.Marshal(manifest.WhatIf.Args)
+			if err != nil || !strings.Contains(string(whatIfArgs), `"--what-if"`) {
+				t.Errorf("whatIf args = %s, want --what-if flag", whatIfArgs)
 			}
 
 			wantTest := slices.Contains(testableResources, manifest.Type)

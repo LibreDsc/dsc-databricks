@@ -104,19 +104,19 @@ func (h *SqlWarehouseHandler) Get(ctx context.Context, in SqlWarehouseState) (Sq
 	}
 
 	if in.ID != "" {
-		dsc.Logger.Debugf(MsgLookup, "SqlWarehouse", "id="+in.ID)
+		logDebugf(MsgLookup, "SqlWarehouse", "id="+in.ID)
 		resp, err := w.Warehouses.GetById(ctx, in.ID)
 		if err != nil {
-			dsc.Logger.Infof(MsgNotFound, "SqlWarehouse", "id="+in.ID)
+			logInfof(MsgNotFound, "SqlWarehouse", "id="+in.ID)
 			return dsc.NotFound(SqlWarehouseState{ID: in.ID}, "SqlWarehouse", "id="+in.ID)
 		}
 		return warehouseResponseToState(resp), nil
 	}
 
-	dsc.Logger.Debugf(MsgLookup, "SqlWarehouse", "name="+in.Name)
+	logDebugf(MsgLookup, "SqlWarehouse", "name="+in.Name)
 	info, err := w.Warehouses.GetByName(ctx, in.Name)
 	if err != nil {
-		dsc.Logger.Infof(MsgNotFound, "SqlWarehouse", "name="+in.Name)
+		logInfof(MsgNotFound, "SqlWarehouse", "name="+in.Name)
 		return dsc.NotFound(SqlWarehouseState{Name: in.Name}, "SqlWarehouse", "name="+in.Name)
 	}
 	return endpointInfoToState(info), nil
@@ -190,7 +190,7 @@ func (h *SqlWarehouseHandler) Set(ctx context.Context, desired SqlWarehouseState
 	}
 
 	if current.ShouldExist() {
-		dsc.Logger.Infof(MsgUpdate, "SqlWarehouse", "id="+current.ID)
+		logInfof(MsgUpdate, "SqlWarehouse", "id="+current.ID)
 		// Warehouse exists — edit it.
 		effectiveName := desired.Name
 		if effectiveName == "" {
@@ -219,7 +219,7 @@ func (h *SqlWarehouseHandler) Set(ctx context.Context, desired SqlWarehouseState
 		return warehouseResponseToState(updated), nil
 	}
 
-	dsc.Logger.Infof(MsgCreate, "SqlWarehouse", "name="+desired.Name)
+	logInfof(MsgCreate, "SqlWarehouse", "name="+desired.Name)
 	// Warehouse does not exist — create it.
 	if err := requireFields(
 		field{"name", desired.Name},
@@ -240,6 +240,81 @@ func (h *SqlWarehouseHandler) Set(ctx context.Context, desired SqlWarehouseState
 	return warehouseResponseToState(created), nil
 }
 
+// projectSqlWarehouseCreate returns the state Set's create path would
+// produce. Server-computed fields (id, state, num_clusters) stay empty.
+func projectSqlWarehouseCreate(desired *SqlWarehouseState) SqlWarehouseState {
+	projected := *desired
+	projected.ID = ""
+	projected.State = ""
+	projected.NumClusters = 0
+	projected.SetExist(true)
+	return projected
+}
+
+// projectSqlWarehouseUpdate mirrors buildEditWarehouseRequest: non-zero
+// desired values win, auto_stop_mins always comes from desired (Set
+// force-sends it even at 0), and read-only fields carry over from current.
+func projectSqlWarehouseUpdate(desired, current *SqlWarehouseState) SqlWarehouseState {
+	projected := *current
+	if desired.Name != "" {
+		projected.Name = desired.Name
+	}
+	if desired.ClusterSize != "" {
+		projected.ClusterSize = desired.ClusterSize
+	}
+	if desired.SpotInstancePolicy != "" {
+		projected.SpotInstancePolicy = desired.SpotInstancePolicy
+	}
+	if desired.WarehouseType != "" {
+		projected.WarehouseType = desired.WarehouseType
+	}
+	if desired.Channel != "" {
+		projected.Channel = desired.Channel
+	}
+	projected.AutoStopMins = desired.AutoStopMins
+	if desired.MinNumClusters > 0 {
+		projected.MinNumClusters = desired.MinNumClusters
+	}
+	if desired.MaxNumClusters > 0 {
+		projected.MaxNumClusters = desired.MaxNumClusters
+	}
+	if desired.EnablePhoton {
+		projected.EnablePhoton = true
+	}
+	if desired.EnableServerlessCompute {
+		projected.EnableServerlessCompute = true
+	}
+	projected.SetExist(true)
+	return projected
+}
+
+// SetWhatIf predicts the state Set would produce without touching the
+// warehouse.
+func (h *SqlWarehouseHandler) SetWhatIf(ctx context.Context, desired SqlWarehouseState) (SqlWarehouseState, error) {
+	if err := requireAtLeastOne("id or name", desired.ID, desired.Name); err != nil {
+		return desired, err
+	}
+
+	current, err := h.Get(ctx, desired)
+	if err != nil {
+		return desired, err
+	}
+
+	if current.ShouldExist() {
+		logInfof(MsgWhatIfUpdate, "SqlWarehouse", "id="+current.ID)
+		return projectSqlWarehouseUpdate(&desired, &current), nil
+	}
+
+	if err := requireFields(
+		field{"name", desired.Name},
+		field{"cluster_size", desired.ClusterSize},
+	); err != nil {
+		return desired, err
+	}
+	logInfof(MsgWhatIfCreate, "SqlWarehouse", "name="+desired.Name)
+	return projectSqlWarehouseCreate(&desired), nil
+}
+
 func (h *SqlWarehouseHandler) Delete(ctx context.Context, in SqlWarehouseState) error {
 	if err := requireAtLeastOne("id or name", in.ID, in.Name); err != nil {
 		return err
@@ -255,13 +330,13 @@ func (h *SqlWarehouseHandler) Delete(ctx context.Context, in SqlWarehouseState) 
 		info, lookupErr := w.Warehouses.GetByName(ctx, in.Name)
 		if lookupErr != nil {
 			// Already absent — deleting a missing instance succeeds.
-			dsc.Logger.Infof(MsgNotFound, "SqlWarehouse", "name="+in.Name)
+			logInfof(MsgNotFound, "SqlWarehouse", "name="+in.Name)
 			return nil
 		}
 		warehouseID = info.Id
 	}
 
-	dsc.Logger.Debugf(MsgDelete, "SqlWarehouse", "id="+warehouseID)
+	logDebugf(MsgDelete, "SqlWarehouse", "id="+warehouseID)
 	// Stop the warehouse first if it is running, then delete it.
 	resp, err := w.Warehouses.GetById(ctx, warehouseID)
 	if err != nil {
@@ -294,7 +369,7 @@ func (h *SqlWarehouseHandler) Export(ctx context.Context, _ SqlWarehouseState) (
 		return nil, err
 	}
 
-	dsc.Logger.Debugf(MsgListAll, "SqlWarehouse")
+	logDebugf(MsgListAll, "SqlWarehouse")
 	warehouses, err := w.Warehouses.ListAll(ctx, sql.ListWarehousesRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list SQL warehouses: %w", err)

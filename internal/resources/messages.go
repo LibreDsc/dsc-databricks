@@ -1,8 +1,10 @@
 package resources
 
 // Log message format strings.
-// Centralizing messages enables future localization and ensures consistent wording
-// across all DSC resource handlers.
+// Each constant doubles as a localization catalog key (see i18n.go): the
+// constant value is the canonical English format string, and translations are
+// registered against it per language. Every new constant must also be added
+// to localizedMessages in i18n.go.
 
 // Resource-level messages used across all resource handlers.
 const (
@@ -15,6 +17,13 @@ const (
 	MsgAlreadyExists = "%s: %s already exists"
 	MsgPut           = "%s: setting %s"
 	MsgSkipping      = "%s: skipping %s: %s"
+)
+
+// What-if messages: emitted by SetWhatIf instead of the mutating message.
+const (
+	MsgWhatIfCreate = "%s: would create %s"
+	MsgWhatIfUpdate = "%s: would update %s"
+	MsgWhatIfPut    = "%s: would set %s"
 )
 
 // Client initialization messages.

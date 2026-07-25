@@ -104,10 +104,10 @@ func (h *SqlWarehousePermissionHandler) Get(ctx context.Context, in SqlWarehouse
 	}
 
 	if warehouseID == "" {
-		dsc.Logger.Debugf(MsgLookup, "SqlWarehousePermission", "warehouse_name="+warehouseName)
+		logDebugf(MsgLookup, "SqlWarehousePermission", "warehouse_name="+warehouseName)
 		info, err := w.Warehouses.GetByName(ctx, warehouseName)
 		if err != nil {
-			dsc.Logger.Infof(MsgNotFound, "SqlWarehousePermission", "warehouse_name="+warehouseName)
+			logInfof(MsgNotFound, "SqlWarehousePermission", "warehouse_name="+warehouseName)
 			return dsc.NotFound(notFoundState(), "SqlWarehousePermission", "warehouse_name="+warehouseName)
 		}
 		warehouseID = info.Id
@@ -115,11 +115,11 @@ func (h *SqlWarehousePermissionHandler) Get(ctx context.Context, in SqlWarehouse
 	}
 
 	principalType, principalName := in.principalKey()
-	dsc.Logger.Debugf(MsgLookup, "SqlWarehousePermission", principalType+"="+principalName+" warehouse_id="+warehouseID)
+	logDebugf(MsgLookup, "SqlWarehousePermission", principalType+"="+principalName+" warehouse_id="+warehouseID)
 
 	perms, err := w.Warehouses.GetPermissions(ctx, sql.GetWarehousePermissionsRequest{WarehouseId: warehouseID})
 	if err != nil {
-		dsc.Logger.Infof(MsgNotFound, "SqlWarehousePermission", "warehouse_id="+warehouseID)
+		logInfof(MsgNotFound, "SqlWarehousePermission", "warehouse_id="+warehouseID)
 		return dsc.NotFound(notFoundState(), "SqlWarehousePermission", "warehouse_id="+warehouseID)
 	}
 
@@ -142,7 +142,7 @@ func (h *SqlWarehousePermissionHandler) Get(ctx context.Context, in SqlWarehouse
 		}
 	}
 
-	dsc.Logger.Infof(MsgNotFound, "SqlWarehousePermission", principalType+"="+principalName+" warehouse_id="+warehouseID)
+	logInfof(MsgNotFound, "SqlWarehousePermission", principalType+"="+principalName+" warehouse_id="+warehouseID)
 	return dsc.NotFound(notFoundState(), "SqlWarehousePermission",
 		principalType+"="+principalName, "warehouse_id="+warehouseID)
 }
@@ -171,7 +171,7 @@ func (h *SqlWarehousePermissionHandler) Set(ctx context.Context, desired SqlWare
 	}
 
 	principalType, principalName := desired.principalKey()
-	dsc.Logger.Infof(MsgPut, "SqlWarehousePermission", principalType+"="+principalName+" warehouse_id="+warehouseID+" permission_level="+desired.PermissionLevel)
+	logInfof(MsgPut, "SqlWarehousePermission", principalType+"="+principalName+" warehouse_id="+warehouseID+" permission_level="+desired.PermissionLevel)
 
 	// PATCH (UpdatePermissions) adds or updates the specific entry without
 	// disturbing other entries on the warehouse.
@@ -189,6 +189,47 @@ func (h *SqlWarehousePermissionHandler) Set(ctx context.Context, desired SqlWare
 	}
 
 	return h.Get(ctx, desired)
+}
+
+// SetWhatIf predicts the state Set would produce without writing the
+// permission entry. The warehouse lookup is read-only.
+func (h *SqlWarehousePermissionHandler) SetWhatIf(ctx context.Context, desired SqlWarehousePermissionState) (SqlWarehousePermissionState, error) {
+	if err := validateWarehousePermissionIdentity(&desired); err != nil {
+		return desired, err
+	}
+	if err := requireFields(field{"permission_level", desired.PermissionLevel}); err != nil {
+		return desired, err
+	}
+
+	w, err := workspaceClient()
+	if err != nil {
+		return desired, err
+	}
+
+	warehouseID := desired.WarehouseID
+	warehouseName := desired.WarehouseName
+	if warehouseID == "" {
+		info, err := w.Warehouses.GetByName(ctx, warehouseName)
+		if err != nil {
+			return desired, fmt.Errorf("SQL warehouse not found by name=%s: %w", warehouseName, err)
+		}
+		warehouseID = info.Id
+		warehouseName = info.Name
+	}
+
+	principalType, principalName := desired.principalKey()
+	logInfof(MsgWhatIfPut, "SqlWarehousePermission", principalType+"="+principalName+" warehouse_id="+warehouseID+" permission_level="+desired.PermissionLevel)
+
+	projected := SqlWarehousePermissionState{
+		WarehouseID:          warehouseID,
+		WarehouseName:        warehouseName,
+		UserName:             desired.UserName,
+		GroupName:            desired.GroupName,
+		ServicePrincipalName: desired.ServicePrincipalName,
+		PermissionLevel:      desired.PermissionLevel,
+	}
+	projected.SetExist(true)
+	return projected, nil
 }
 
 func (h *SqlWarehousePermissionHandler) Delete(ctx context.Context, in SqlWarehousePermissionState) error {
@@ -212,7 +253,7 @@ func (h *SqlWarehousePermissionHandler) Delete(ctx context.Context, in SqlWareho
 	}
 
 	principalType, principalName := in.principalKey()
-	dsc.Logger.Debugf(MsgDelete, "SqlWarehousePermission", principalType+"="+principalName+" warehouse_id="+warehouseID)
+	logDebugf(MsgDelete, "SqlWarehousePermission", principalType+"="+principalName+" warehouse_id="+warehouseID)
 
 	// GET current permissions so we can rebuild the list without the target entry.
 	perms, err := w.Warehouses.GetPermissions(ctx, sql.GetWarehousePermissionsRequest{WarehouseId: warehouseID})
@@ -252,7 +293,7 @@ func (h *SqlWarehousePermissionHandler) Export(ctx context.Context, _ SqlWarehou
 		return nil, err
 	}
 
-	dsc.Logger.Debugf(MsgListAll, "SqlWarehousePermission")
+	logDebugf(MsgListAll, "SqlWarehousePermission")
 	warehouses, err := w.Warehouses.ListAll(ctx, sql.ListWarehousesRequest{})
 	if err != nil {
 		return nil, err

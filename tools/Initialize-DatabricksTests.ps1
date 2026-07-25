@@ -43,6 +43,44 @@ function Initialize-DatabricksTests
     return $true
 }
 
+function Invoke-DscWhatIf
+{
+    <#
+    .SYNOPSIS
+        Runs dsc config set --what-if for a single resource instance.
+    .DESCRIPTION
+        The DSC engine only exposes what-if at config level (there is no
+        'dsc resource set --what-if'), so the resource instance is wrapped in
+        a minimal configuration document and piped to 'dsc config set -w'.
+        Returns the parsed result document; the prediction is available at
+        results[0].result.afterState and metadata.'Microsoft.DSC'.executionType
+        is 'whatIf'.
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [System.String]
+        $ResourceType,
+
+        [Parameter(Mandatory)]
+        [System.Collections.Hashtable]
+        $Properties
+    )
+
+    $config = @{
+        '$schema' = 'https://aka.ms/dsc/schemas/v3/bundled/config/document.json'
+        resources = @(
+            @{
+                name       = 'whatif'
+                type       = $ResourceType
+                properties = $Properties
+            }
+        )
+    } | ConvertTo-Json -Depth 10 -Compress
+
+    return $config | dsc config set -w -f - | ConvertFrom-Json
+}
+
 function New-TestScopeName
 {
     <#

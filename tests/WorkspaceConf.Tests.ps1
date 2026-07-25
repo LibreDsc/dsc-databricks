@@ -33,6 +33,7 @@ Describe 'Databricks WorkspaceConf Resource' -Tag 'Databricks', 'WorkspaceConf' 
             $result.capabilities | Should -Contain 'set'
             $result.capabilities | Should -Contain 'delete'
             $result.capabilities | Should -Contain 'export'
+            $result.capabilities | Should -Contain 'whatIf'
         }
     }
 
@@ -201,6 +202,31 @@ Describe 'Databricks WorkspaceConf Resource' -Tag 'Databricks', 'WorkspaceConf' 
             $LASTEXITCODE | Should -Be 0
             $result.inDesiredState | Should -Be $false
             $result.differingProperties | Should -Contain 'value'
+        }
+    }
+
+    Context 'WhatIf Operation' -Tag 'WhatIf' {
+        BeforeAll {
+            $inputJson = @{ key = 'enableTokensConfig' } | ConvertTo-Json -Compress
+            $current = dsc resource get -r LibreDsc.Databricks/WorkspaceConf --input $inputJson | ConvertFrom-Json
+            $script:whatIfOriginalValue = $current.actualState.value
+            $script:whatIfFlippedValue = if ($script:whatIfOriginalValue -eq 'true') { 'false' } else { 'true' }
+        }
+
+        It 'should predict the flipped value without applying it' {
+            $result = Invoke-DscWhatIf -ResourceType 'LibreDsc.Databricks/WorkspaceConf' -Properties @{
+                key   = 'enableTokensConfig'
+                value = $script:whatIfFlippedValue
+            }
+            $LASTEXITCODE | Should -Be 0
+            $result.metadata.'Microsoft.DSC'.executionType | Should -Be 'whatIf'
+            $result.results[0].result.afterState.value | Should -Be $script:whatIfFlippedValue
+        }
+
+        It 'should not have changed the real value' {
+            $inputJson = @{ key = 'enableTokensConfig' } | ConvertTo-Json -Compress
+            $get = dsc resource get -r LibreDsc.Databricks/WorkspaceConf --input $inputJson | ConvertFrom-Json
+            $get.actualState.value | Should -Be $script:whatIfOriginalValue
         }
     }
 

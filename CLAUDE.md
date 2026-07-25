@@ -31,7 +31,8 @@ internal/
     ├── register.go             # RegisterAll(m) — the registration point
     ├── clients.go              # workspaceClient() / accountClient()
     ├── validate.go             # requireFields / requireAtLeastOne
-    ├── messages.go             # Msg* log format constants
+    ├── messages.go             # Msg* log format constants (catalog keys)
+    ├── i18n.go                 # localization printer + log wrappers
     ├── iam_helpers.go          # UserComplexValue, SCIM helpers
     └── <resource>.go           # One file per resource (secret.go holds 3)
 tests/                          # Pester E2E suites (one per resource)
@@ -69,8 +70,9 @@ dsc-databricks manifest [--resource <type>] [--out-dir <dir>]
 ```
 
 Input arrives via `--input`/`-i` or piped stdin. Results are compact JSON
-lines on stdout; diagnostics go to stderr. `--what-if` exists for set but no
-resource here implements `WhatIfSettable`.
+lines on stdout; diagnostics go to stderr. Every resource implements
+`WhatIfSettable`, so `set --what-if` returns a native prediction (see the
+What-if section below).
 
 ### Capability model
 
@@ -92,6 +94,10 @@ type Deletable[T any] interface {
 }
 type Exportable[T any] interface {
     Export(ctx context.Context, filter T) ([]T, error)
+}
+type WhatIfSettable[T any] interface {
+    Settable[T]
+    SetWhatIf(ctx context.Context, desired T) (T, error)
 }
 ```
 
@@ -117,6 +123,10 @@ Get, Set, Delete, and Export; only some implement Test (see below).
 - **Export** — Enumerate all instances, calling `SetExist(true)` on each
   returned state. The filter argument is the zero value when no input was
   given and is generally ignored.
+- **SetWhatIf** — Return the exact state Set would produce WITHOUT calling
+  any mutating SDK method. Validate like Set, Get the current state, then
+  project (see the What-if section). Every resource in this repo implements
+  it.
 
 ## State Structs
 
@@ -214,9 +224,10 @@ func RegisterAll(m *dsc.Manager) {
 ```
 
 **Checklist for a new resource:** state struct (embed `ExistProperty`, tags)
-→ handler struct with capability methods → `xConfig()` function → one
-`MustRegister` line in `register.go` → Pester suite in `tests/` → unit tests
-for any pure helpers → update `NEXT_CHANGELOG.md`.
+→ handler struct with capability methods (incl. `SetWhatIf` + projection
+helpers) → `xConfig()` function → one `MustRegister` line in `register.go`
+→ Pester suite in `tests/` (incl. a WhatIf context) → unit tests for pure
+helpers and projections → update `NEXT_CHANGELOG.md`.
 
 ## When to Implement `Testable`
 
@@ -379,6 +390,81 @@ func (h *SecretScopeHandler) Export(ctx context.Context, _ SecretScopeState) ([]
 }
 ```
 
+## What-if (SetWhatIf)
+
+Every resource implements `WhatIfSettable`. The rdk then emits a `whatIf`
+manifest method automatically (`set --what-if`, return `stateAndDiff`),
+computes `changedProperties` via a before-Get + `CompareAllStates`, and the
+`dsc resource list` capabilities include `whatIf`. Note the DSC engine only
+reaches it through `dsc config set -w` with a config document — there is no
+`dsc resource set --what-if` on the engine CLI.
+
+Canonical pattern:
+
+```go
+// SetWhatIf predicts the state Set would produce without creating the scope.
+func (h *SecretScopeHandler) SetWhatIf(ctx context.Context, desired SecretScopeState) (SecretScopeState, error) {
+    if err := requireFields(field{"scope", desired.Scope}); err != nil {
+        return desired, err
+    }
+    current, err := h.Get(ctx, desired)
+    if err != nil {
+        return desired, err
+    }
+    if current.ShouldExist() {
+        logDebugf(MsgAlreadyExists, "SecretScope", "scope="+desired.Scope)
+        return current, nil
+    }
+    logInfof(MsgWhatIfCreate, "SecretScope", "scope="+desired.Scope)
+    projected := SecretScopeState{Scope: desired.Scope, BackendType: "DATABRICKS"}
+    projected.SetExist(true)
+    return projected, nil
+}
+```
+
+**Projection rules:**
+
+- NEVER call a mutating SDK method — the only allowed API calls are
+  read-only lookups (Get, GetByName).
+- Validate the same fields as Set, including the create-branch required
+  fields when the instance is absent, so what-if surfaces the same errors.
+- Would-create: server-computed fields (ids, `state`, `head_commit_id`)
+  stay **empty**; everything else comes from desired.
+- Would-update: start from current (keeps ids and read-only fields like
+  `state`, `etag`, `num_clusters`) and overlay exactly what Set's SDK
+  request would send — non-zero desired values win because the SDK omits
+  zero values; force-sent fields (e.g. `active`, `auto_stop_mins`,
+  `num_workers` outside autoscale) always come from desired.
+- Extract the merge into pure `projectXCreate` / `projectXUpdate` helpers
+  next to the request builders and unit-test them
+  (`whatif_projection_test.go`); trivial resources build the literal inline.
+- Log `MsgWhatIfCreate` / `MsgWhatIfUpdate` / `MsgWhatIfPut` at Info instead
+  of the mutating message.
+- Keep projections in sync with Set: whenever Set's request building
+  changes, update the matching `projectX*` helper.
+
+## Localization
+
+All log messages route through a `golang.org/x/text` message printer defined
+in `internal/resources/i18n.go`:
+
+- The `Msg*` constants in `messages.go` double as catalog keys (the key IS
+  the canonical English format string), so untranslated languages fall back
+  to readable English.
+- The language is resolved once at startup from `DSC_DATABRICKS_LANG`, then
+  `LC_ALL`, then `LANG` (POSIX values like `en_US.UTF-8` are normalized),
+  defaulting to English. `supportedLanguages` lists the shipped catalogs —
+  currently English only.
+- Call sites use the localized wrappers, never `dsc.Logger.*f` directly:
+  `logDebugf(MsgLookup, "Catalog", "name="+in.Name)`,
+  `logInfof(MsgCreate, ...)`, `logDebug(MsgCreatingWorkspaceClient)`.
+- Adding a message: add the constant to `messages.go` AND register it in
+  `localizedMessages` in `i18n.go` (the `TestCatalogCompleteness` unit test
+  enforces this).
+- Adding a language: append its tag to `supportedLanguages` and register a
+  translation for every key via `message.SetString(tag, key, translation)`
+  in `newPrinter`. No call-site changes are needed.
+
 ## Validation and Errors
 
 Validate identifying fields at the top of Get/Set/Delete using the helpers
@@ -405,15 +491,18 @@ exit code 6 automatically.
 
 ## Logging
 
-Use the rdk's `dsc.Logger` for ALL diagnostics — JSON lines on stderr
-(`{"info": "..."}` etc.), level controlled by `DSC_TRACE_LEVEL`
+All diagnostics go through the localized wrappers in `i18n.go` (`logDebug`,
+`logDebugf`, `logInfof`), which render via the message printer and emit
+through the rdk's `dsc.Logger` — JSON lines on stderr (`{"info": "..."}`
+etc.), level controlled by `DSC_TRACE_LEVEL`
 (OFF/ERROR/WARN/INFO/DEBUG/TRACE, default WARN). Never write diagnostics to
 stdout; stdout is reserved for JSON results.
 
 Message format strings are centralized in `internal/resources/messages.go`
 (`MsgLookup`, `MsgNotFound`, `MsgCreate`, `MsgUpdate`, `MsgDelete`,
-`MsgPut`, `MsgListAll`, `MsgAlreadyExists`, ...). Conventions: `Debugf` for
-lookups/deletes/listings, `Infof` for creates/updates/not-found.
+`MsgPut`, `MsgListAll`, `MsgAlreadyExists`, `MsgWhatIf*`, ...). Conventions:
+`logDebugf` for lookups/deletes/listings, `logInfof` for
+creates/updates/not-found and what-if predictions.
 
 ## Authentication
 
@@ -450,10 +539,14 @@ only** — no live SDK calls, no client mocking:
 - State conversion and SCIM complex-value helpers
 - Validation helpers (exit-code behavior)
 - Principal matching / key computation
+- Projection helpers (`projectXCreate`/`projectXUpdate` overlay semantics —
+  see `whatif_projection_test.go`)
+- Localization (`i18n_test.go`: language resolution, catalog completeness)
 - `register_test.go` — the parity net: `RegisterAll` into a Manager, then
-  assert resource count, manifest methods and returns per resource, and
-  schema invariants (`_exist` default true, expected `required` lists, no
-  `additionalProperties: false`).
+  assert resource count, manifest methods and returns per resource
+  (including a `whatIf` method with return `stateAndDiff` on every
+  resource), and schema invariants (`_exist` default true, expected
+  `required` lists, no `additionalProperties: false`).
 
 Use table-driven tests. Run with `go test ./...`.
 
@@ -494,9 +587,19 @@ Describe 'Resource' -Skip:(!$script:databricksAvailable) {
 one there when a new resource needs one.
 
 **Context order per Describe:** Discovery (`dsc resource list`,
-capabilities) → Schema Validation (`_exist` present, `default: true`) → Get
-(missing → `_exist=false`) → Set–Create → Set–Update → Test → Export →
-Delete → Idempotency.
+capabilities incl. `whatIf`) → Schema Validation (`_exist` present,
+`default: true`) → Get (missing → `_exist=false`) → Set–Create →
+Set–Update → Test → WhatIf → Export → Delete → Idempotency.
+
+**WhatIf contexts** use the `Invoke-DscWhatIf` helper in
+`tools/Initialize-DatabricksTests.ps1` — it wraps the instance in a config
+document and pipes it to `dsc config set -w -f -` (the engine has no
+`dsc resource set --what-if`). Assert
+`metadata.'Microsoft.DSC'.executionType -eq 'whatIf'` and the predicted
+`results[0].result.afterState`, then prove nothing changed with a follow-up
+`dsc resource get`. Would-create predictions use a fresh unique name (zero
+cost, no cleanup); would-update predictions target the suite's existing
+fixture.
 
 **Assertion caveats:**
 
@@ -531,5 +634,12 @@ unique-name generators to avoid collisions.
   in `register.go`.
 - **Forgetting `AllowAdditionalProperties: true`** — the rdk default emits
   `additionalProperties: false`.
+- **Mutating inside `SetWhatIf`** — the what-if contract is read-only;
+  only lookups are allowed.
+- **Projection drift** — when Set's request building changes, the matching
+  `projectXCreate`/`projectXUpdate` helper must change with it.
+- **Calling `dsc.Logger.*f` directly** — always use the localized wrappers
+  (`logDebugf`/`logInfof`/`logDebug`), and register new `Msg*` constants in
+  `localizedMessages`.
 - **Skipping `NEXT_CHANGELOG.md`** — the changelog-guard workflow fails PRs
   that don't update it.

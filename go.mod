@@ -5,6 +5,7 @@ go 1.26
 require (
 	github.com/LibreDsc/dsc-go-rdk v0.1.0
 	github.com/databricks/databricks-sdk-go v0.118.0
+	golang.org/x/text v0.34.0
 )
 
 require (
@@ -32,7 +33,6 @@ require (
 	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/oauth2 v0.35.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
-	golang.org/x/text v0.34.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
 	google.golang.org/api v0.265.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260203192932-546029d2fa20 // indirect

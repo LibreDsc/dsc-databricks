@@ -47,6 +47,7 @@ Describe 'Databricks Group Resource' -Tag 'Databricks', 'Group' -Skip:(!$script:
             $result.capabilities | Should -Contain 'set'
             $result.capabilities | Should -Contain 'delete'
             $result.capabilities | Should -Contain 'export'
+            $result.capabilities | Should -Contain 'whatIf'
         }
     }
 
@@ -190,6 +191,26 @@ Describe 'Databricks Group Resource' -Tag 'Databricks', 'Group' -Skip:(!$script:
             $g2 = $result.resources | Where-Object { $_.properties.display_name -eq $script:exportGroupName }
             $g2 | Should -Not -BeNullOrEmpty
             $g2.properties._exist | Should -Be $true
+        }
+    }
+
+    Context 'WhatIf Operation' -Tag 'WhatIf' {
+        It 'should predict a rename without applying it' {
+            $result = Invoke-DscWhatIf -ResourceType 'LibreDsc.Databricks/Group' -Properties @{
+                display_name = $script:testGroupName
+                external_id  = 'whatif-external-id'
+            }
+            $LASTEXITCODE | Should -Be 0
+            $result.metadata.'Microsoft.DSC'.executionType | Should -Be 'whatIf'
+            $result.results[0].result.afterState._exist | Should -Be $true
+            $result.results[0].result.afterState.external_id | Should -Be 'whatif-external-id'
+            $result.results[0].result.afterState.id | Should -Be $script:testGroupId
+        }
+
+        It 'should not have changed the real group' {
+            $inputJson = @{ id = $script:testGroupId } | ConvertTo-Json -Compress
+            $get = dsc resource get -r LibreDsc.Databricks/Group --input $inputJson | ConvertFrom-Json
+            $get.actualState.external_id | Should -Not -Be 'whatif-external-id'
         }
     }
 

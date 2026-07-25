@@ -53,6 +53,7 @@ Describe 'Databricks Repo Resource' -Tag 'Databricks', 'Repo' -Skip:(!$script:da
             $result.capabilities | Should -Contain 'set'
             $result.capabilities | Should -Contain 'delete'
             $result.capabilities | Should -Contain 'export'
+            $result.capabilities | Should -Contain 'whatIf'
         }
     }
 
@@ -153,6 +154,28 @@ Describe 'Databricks Repo Resource' -Tag 'Databricks', 'Repo' -Skip:(!$script:da
             $testRepo = $result.resources | Where-Object { $_.properties.path -eq $script:testRepoPath }
             $testRepo | Should -Not -BeNullOrEmpty
             $testRepo.properties._exist | Should -Be $true
+        }
+    }
+
+    Context 'WhatIf Operation' -Tag 'WhatIf' {
+        It 'should predict a branch change without applying it' {
+            $current = dsc resource get -r LibreDsc.Databricks/Repo --input (@{ path = $script:testRepoPath } | ConvertTo-Json -Compress) | ConvertFrom-Json
+            $script:whatIfCurrentBranch = $current.actualState.branch
+
+            $result = Invoke-DscWhatIf -ResourceType 'LibreDsc.Databricks/Repo' -Properties @{
+                path   = $script:testRepoPath
+                branch = 'dsc-whatif-branch'
+            }
+            $LASTEXITCODE | Should -Be 0
+            $result.metadata.'Microsoft.DSC'.executionType | Should -Be 'whatIf'
+            $result.results[0].result.afterState._exist | Should -Be $true
+            $result.results[0].result.afterState.branch | Should -Be 'dsc-whatif-branch'
+        }
+
+        It 'should not have changed the real branch' {
+            $inputJson = @{ path = $script:testRepoPath } | ConvertTo-Json -Compress
+            $get = dsc resource get -r LibreDsc.Databricks/Repo --input $inputJson | ConvertFrom-Json
+            $get.actualState.branch | Should -Be $script:whatIfCurrentBranch
         }
     }
 

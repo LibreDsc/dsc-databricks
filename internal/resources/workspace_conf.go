@@ -57,7 +57,7 @@ func (h *WorkspaceConfHandler) Get(ctx context.Context, in WorkspaceConfState) (
 		return in, err
 	}
 
-	dsc.Logger.Debugf(MsgLookup, "WorkspaceConf", "key="+in.Key)
+	logDebugf(MsgLookup, "WorkspaceConf", "key="+in.Key)
 	result, err := w.WorkspaceConf.GetStatus(ctx, settings.GetStatusRequest{Keys: in.Key})
 	if err != nil {
 		return in, err
@@ -71,7 +71,7 @@ func (h *WorkspaceConfHandler) Get(ctx context.Context, in WorkspaceConfState) (
 		}
 	}
 
-	dsc.Logger.Infof(MsgNotFound, "WorkspaceConf", "key="+in.Key)
+	logInfof(MsgNotFound, "WorkspaceConf", "key="+in.Key)
 	return dsc.NotFound(WorkspaceConfState{Key: in.Key}, "WorkspaceConf", "key="+in.Key)
 }
 
@@ -85,7 +85,7 @@ func (h *WorkspaceConfHandler) Set(ctx context.Context, desired WorkspaceConfSta
 		return desired, err
 	}
 
-	dsc.Logger.Infof(MsgPut, "WorkspaceConf", "key="+desired.Key)
+	logInfof(MsgPut, "WorkspaceConf", "key="+desired.Key)
 	if err := w.WorkspaceConf.SetStatus(ctx, settings.WorkspaceConf{
 		desired.Key: desired.Value,
 	}); err != nil {
@@ -93,6 +93,18 @@ func (h *WorkspaceConfHandler) Set(ctx context.Context, desired WorkspaceConfSta
 	}
 
 	return h.Get(ctx, desired)
+}
+
+// SetWhatIf predicts the state Set would produce without applying the value.
+func (h *WorkspaceConfHandler) SetWhatIf(_ context.Context, desired WorkspaceConfState) (WorkspaceConfState, error) {
+	if err := requireFields(field{"key", desired.Key}, field{"value", desired.Value}); err != nil {
+		return desired, err
+	}
+
+	logInfof(MsgWhatIfPut, "WorkspaceConf", "key="+desired.Key)
+	projected := WorkspaceConfState{Key: desired.Key, Value: desired.Value}
+	projected.SetExist(true)
+	return projected, nil
 }
 
 func (h *WorkspaceConfHandler) Delete(_ context.Context, _ WorkspaceConfState) error {
@@ -109,7 +121,7 @@ func (h *WorkspaceConfHandler) Export(ctx context.Context, _ WorkspaceConfState)
 	}
 
 	// Build a comma-separated list of known keys for a single API call.
-	dsc.Logger.Debugf(MsgListAll, "WorkspaceConf")
+	logDebugf(MsgListAll, "WorkspaceConf")
 	result, err := w.WorkspaceConf.GetStatus(ctx, settings.GetStatusRequest{
 		Keys: strings.Join(knownKeys, ","),
 	})

@@ -55,6 +55,7 @@ Describe 'Databricks Secret Resource' -Tag 'Databricks', 'Secret' -Skip:(!$scrip
             $result.capabilities | Should -Contain 'set'
             $result.capabilities | Should -Contain 'delete'
             $result.capabilities | Should -Contain 'export'
+            $result.capabilities | Should -Contain 'whatIf'
         }
     }
 
@@ -164,6 +165,28 @@ Describe 'Databricks Secret Resource' -Tag 'Databricks', 'Secret' -Skip:(!$scrip
             $result | Should -Not -BeNullOrEmpty
             $found = $result.resources | Where-Object { $_.properties.scope -eq $script:testScopeName -and $_.properties.key -eq $script:testSecretKey }
             $found | Should -Not -BeNullOrEmpty
+        }
+    }
+
+    Context 'WhatIf Operation' -Tag 'WhatIf' {
+        It 'should predict secret creation without storing anything' {
+            $script:whatIfSecretKey = "dsc-whatif-secret-$([guid]::NewGuid().ToString('N').Substring(0,8))"
+            $result = Invoke-DscWhatIf -ResourceType 'LibreDsc.Databricks/Secret' -Properties @{
+                scope        = $script:testScopeName
+                key          = $script:whatIfSecretKey
+                string_value = 'whatif-value'
+            }
+            $LASTEXITCODE | Should -Be 0
+            $result.metadata.'Microsoft.DSC'.executionType | Should -Be 'whatIf'
+            $result.results[0].result.afterState._exist | Should -Be $true
+            $result.results[0].result.afterState.key | Should -Be $script:whatIfSecretKey
+            $result.results[0].result.afterState.string_value | Should -BeNullOrEmpty
+        }
+
+        It 'should not have created the secret' {
+            $inputJson = @{ scope = $script:testScopeName; key = $script:whatIfSecretKey } | ConvertTo-Json -Compress
+            $get = dsc resource get -r LibreDsc.Databricks/Secret --input $inputJson | ConvertFrom-Json
+            $get.actualState._exist | Should -Be $false
         }
     }
 

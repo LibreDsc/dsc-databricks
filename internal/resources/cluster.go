@@ -101,19 +101,19 @@ func (h *ClusterHandler) Get(ctx context.Context, in ClusterState) (ClusterState
 	}
 
 	if in.ClusterID != "" {
-		dsc.Logger.Debugf(MsgLookup, "Cluster", "cluster_id="+in.ClusterID)
+		logDebugf(MsgLookup, "Cluster", "cluster_id="+in.ClusterID)
 		c, err := w.Clusters.GetByClusterId(ctx, in.ClusterID)
 		if err != nil {
-			dsc.Logger.Infof(MsgNotFound, "Cluster", "cluster_id="+in.ClusterID)
+			logInfof(MsgNotFound, "Cluster", "cluster_id="+in.ClusterID)
 			return dsc.NotFound(ClusterState{ClusterID: in.ClusterID}, "Cluster", "cluster_id="+in.ClusterID)
 		}
 		return clusterToState(c), nil
 	}
 
-	dsc.Logger.Debugf(MsgLookup, "Cluster", "cluster_name="+in.ClusterName)
+	logDebugf(MsgLookup, "Cluster", "cluster_name="+in.ClusterName)
 	c, err := w.Clusters.GetByClusterName(ctx, in.ClusterName)
 	if err != nil {
-		dsc.Logger.Infof(MsgNotFound, "Cluster", "cluster_name="+in.ClusterName)
+		logInfof(MsgNotFound, "Cluster", "cluster_name="+in.ClusterName)
 		return dsc.NotFound(ClusterState{ClusterName: in.ClusterName}, "Cluster", "cluster_name="+in.ClusterName)
 	}
 	return clusterToState(c), nil
@@ -204,7 +204,7 @@ func (h *ClusterHandler) Set(ctx context.Context, desired ClusterState) (Cluster
 	}
 
 	if current.ShouldExist() {
-		dsc.Logger.Infof(MsgUpdate, "Cluster", "cluster_id="+current.ClusterID)
+		logInfof(MsgUpdate, "Cluster", "cluster_id="+current.ClusterID)
 		// Cluster exists — edit it. Edit requires the cluster to be RUNNING or TERMINATED.
 		effectiveName := desired.ClusterName
 		if effectiveName == "" {
@@ -238,7 +238,7 @@ func (h *ClusterHandler) Set(ctx context.Context, desired ClusterState) (Cluster
 		return clusterToState(updated), nil
 	}
 
-	dsc.Logger.Infof(MsgCreate, "Cluster", "cluster_name="+desired.ClusterName)
+	logInfof(MsgCreate, "Cluster", "cluster_name="+desired.ClusterName)
 	// Cluster does not exist — create it.
 	if err := requireFields(
 		field{"cluster_name", desired.ClusterName},
@@ -259,6 +259,105 @@ func (h *ClusterHandler) Set(ctx context.Context, desired ClusterState) (Cluster
 	return clusterToState(created), nil
 }
 
+// projectClusterCreate returns the state Set's create path would produce.
+// Server-computed fields (cluster_id, state, state_message) are unknown
+// before creation and stay empty.
+func projectClusterCreate(desired *ClusterState) ClusterState {
+	projected := *desired
+	projected.ClusterID = ""
+	projected.State = ""
+	projected.StateMessage = ""
+	projected.SetExist(true)
+	return projected
+}
+
+// projectClusterUpdate mirrors buildEditRequest: non-zero desired values win
+// (the SDK omits zero values from the edit request), read-only fields carry
+// over from the current state, and num_workers follows the autoscale branch.
+func projectClusterUpdate(desired, current *ClusterState) ClusterState {
+	projected := *current
+	if desired.ClusterName != "" {
+		projected.ClusterName = desired.ClusterName
+	}
+	if desired.SparkVersion != "" {
+		projected.SparkVersion = desired.SparkVersion
+	}
+	if desired.NodeTypeID != "" {
+		projected.NodeTypeID = desired.NodeTypeID
+	}
+	if desired.DriverNodeTypeID != "" {
+		projected.DriverNodeTypeID = desired.DriverNodeTypeID
+	}
+	if desired.DataSecurityMode != "" {
+		projected.DataSecurityMode = desired.DataSecurityMode
+	}
+	if desired.SingleUserName != "" {
+		projected.SingleUserName = desired.SingleUserName
+	}
+	if desired.PolicyID != "" {
+		projected.PolicyID = desired.PolicyID
+	}
+	if desired.InstancePoolID != "" {
+		projected.InstancePoolID = desired.InstancePoolID
+	}
+	if desired.DriverInstancePoolID != "" {
+		projected.DriverInstancePoolID = desired.DriverInstancePoolID
+	}
+	if desired.RuntimeEngine != "" {
+		projected.RuntimeEngine = desired.RuntimeEngine
+	}
+	if desired.AutoterminationMinutes > 0 {
+		projected.AutoterminationMinutes = desired.AutoterminationMinutes
+	}
+	if desired.EnableElasticDisk {
+		projected.EnableElasticDisk = true
+	}
+	if desired.AutoscaleMinWorkers > 0 || desired.AutoscaleMaxWorkers > 0 {
+		projected.AutoscaleMinWorkers = desired.AutoscaleMinWorkers
+		projected.AutoscaleMaxWorkers = desired.AutoscaleMaxWorkers
+		// num_workers is server-managed under autoscale; keep current.
+	} else {
+		// buildEditRequest force-sends NumWorkers (0 included).
+		projected.NumWorkers = desired.NumWorkers
+		projected.AutoscaleMinWorkers = 0
+		projected.AutoscaleMaxWorkers = 0
+	}
+	if len(desired.SparkConf) > 0 {
+		projected.SparkConf = desired.SparkConf
+	}
+	if len(desired.CustomTags) > 0 {
+		projected.CustomTags = desired.CustomTags
+	}
+	projected.SetExist(true)
+	return projected
+}
+
+// SetWhatIf predicts the state Set would produce without touching the cluster.
+func (h *ClusterHandler) SetWhatIf(ctx context.Context, desired ClusterState) (ClusterState, error) {
+	if err := requireAtLeastOne("cluster_id or cluster_name", desired.ClusterID, desired.ClusterName); err != nil {
+		return desired, err
+	}
+
+	current, err := h.Get(ctx, desired)
+	if err != nil {
+		return desired, err
+	}
+
+	if current.ShouldExist() {
+		logInfof(MsgWhatIfUpdate, "Cluster", "cluster_id="+current.ClusterID)
+		return projectClusterUpdate(&desired, &current), nil
+	}
+
+	if err := requireFields(
+		field{"cluster_name", desired.ClusterName},
+		field{"spark_version", desired.SparkVersion},
+	); err != nil {
+		return desired, err
+	}
+	logInfof(MsgWhatIfCreate, "Cluster", "cluster_name="+desired.ClusterName)
+	return projectClusterCreate(&desired), nil
+}
+
 func (h *ClusterHandler) Delete(ctx context.Context, in ClusterState) error {
 	if err := requireAtLeastOne("cluster_id or cluster_name", in.ClusterID, in.ClusterName); err != nil {
 		return err
@@ -271,17 +370,17 @@ func (h *ClusterHandler) Delete(ctx context.Context, in ClusterState) error {
 
 	clusterID := in.ClusterID
 	if clusterID == "" {
-		dsc.Logger.Debugf(MsgDelete, "Cluster", "cluster_name="+in.ClusterName)
+		logDebugf(MsgDelete, "Cluster", "cluster_name="+in.ClusterName)
 		c, lookupErr := w.Clusters.GetByClusterName(ctx, in.ClusterName)
 		if lookupErr != nil {
 			// Already absent — deleting a missing instance succeeds.
-			dsc.Logger.Infof(MsgNotFound, "Cluster", "cluster_name="+in.ClusterName)
+			logInfof(MsgNotFound, "Cluster", "cluster_name="+in.ClusterName)
 			return nil
 		}
 		clusterID = c.ClusterId
 	}
 
-	dsc.Logger.Debugf(MsgDelete, "Cluster", "cluster_id="+clusterID)
+	logDebugf(MsgDelete, "Cluster", "cluster_id="+clusterID)
 	// Terminate the cluster first if it is running, then permanently delete
 	// it so it no longer appears in the workspace.
 	cluster, err := w.Clusters.GetByClusterId(ctx, clusterID)
@@ -315,7 +414,7 @@ func (h *ClusterHandler) Export(ctx context.Context, _ ClusterState) ([]ClusterS
 		return nil, err
 	}
 
-	dsc.Logger.Debugf(MsgListAll, "Cluster")
+	logDebugf(MsgListAll, "Cluster")
 	clusters, err := w.Clusters.ListAll(ctx, compute.ListClustersRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list clusters: %w", err)
