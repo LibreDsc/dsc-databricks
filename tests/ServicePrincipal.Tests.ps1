@@ -47,6 +47,7 @@ Describe 'Databricks ServicePrincipal Resource' -Tag 'Databricks', 'ServicePrinc
             $result.capabilities | Should -Contain 'set'
             $result.capabilities | Should -Contain 'delete'
             $result.capabilities | Should -Contain 'export'
+            $result.capabilities | Should -Contain 'whatIf'
         }
     }
 
@@ -217,6 +218,26 @@ Describe 'Databricks ServicePrincipal Resource' -Tag 'Databricks', 'ServicePrinc
             $sp2 = $result.resources | Where-Object { $_.properties.display_name -eq $script:exportSpName }
             $sp2 | Should -Not -BeNullOrEmpty
             $sp2.properties._exist | Should -Be $true
+        }
+    }
+
+    Context 'WhatIf Operation' -Tag 'WhatIf' {
+        It 'should predict an external id change without applying it' {
+            $result = Invoke-DscWhatIf -ResourceType 'LibreDsc.Databricks/ServicePrincipal' -Properties @{
+                display_name = $script:testSpName
+                external_id  = 'whatif-external-id'
+                active       = $true
+            }
+            $LASTEXITCODE | Should -Be 0
+            $result.metadata.'Microsoft.DSC'.executionType | Should -Be 'whatIf'
+            $result.results[0].result.afterState._exist | Should -Be $true
+            $result.results[0].result.afterState.external_id | Should -Be 'whatif-external-id'
+        }
+
+        It 'should not have changed the real service principal' {
+            $inputJson = @{ display_name = $script:testSpName } | ConvertTo-Json -Compress
+            $get = dsc resource get -r LibreDsc.Databricks/ServicePrincipal --input $inputJson | ConvertFrom-Json
+            $get.actualState.external_id | Should -Not -Be 'whatif-external-id'
         }
     }
 

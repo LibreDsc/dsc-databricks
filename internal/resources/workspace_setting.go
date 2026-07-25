@@ -473,7 +473,7 @@ func (h *WorkspaceSettingHandler) Get(ctx context.Context, in WorkspaceSettingSt
 		return in, err
 	}
 
-	dsc.Logger.Debugf(MsgLookup, "WorkspaceSetting", "setting_name="+in.SettingName)
+	logDebugf(MsgLookup, "WorkspaceSetting", "setting_name="+in.SettingName)
 	value, etag, err := def.get(ctx, w)
 	if err != nil {
 		// Settings always exist on a workspace; an error here is a real error
@@ -510,12 +510,45 @@ func (h *WorkspaceSettingHandler) Set(ctx context.Context, desired WorkspaceSett
 		return desired, fmt.Errorf("failed to read current setting: %w", err)
 	}
 
-	dsc.Logger.Infof(MsgUpdate, "WorkspaceSetting", "setting_name="+desired.SettingName)
+	logInfof(MsgUpdate, "WorkspaceSetting", "setting_name="+desired.SettingName)
 	if err := def.update(ctx, w, desired.Value, etag); err != nil {
 		return desired, fmt.Errorf("failed to update setting %q: %w", desired.SettingName, err)
 	}
 
 	return h.Get(ctx, desired)
+}
+
+// projectWorkspaceSettingUpdate returns the state Set would produce. The
+// post-update etag cannot be predicted, so the current etag is carried over.
+func projectWorkspaceSettingUpdate(desired, current *WorkspaceSettingState) WorkspaceSettingState {
+	projected := WorkspaceSettingState{
+		SettingName: desired.SettingName,
+		Value:       desired.Value,
+		Etag:        current.Etag,
+	}
+	projected.SetExist(true)
+	return projected
+}
+
+// SetWhatIf predicts the state Set would produce without updating the setting.
+func (h *WorkspaceSettingHandler) SetWhatIf(ctx context.Context, desired WorkspaceSettingState) (WorkspaceSettingState, error) {
+	if err := requireFields(
+		field{"setting_name", desired.SettingName},
+		field{"value", desired.Value},
+	); err != nil {
+		return desired, err
+	}
+	if _, ok := settingRegistry[desired.SettingName]; !ok {
+		return desired, dsc.NewExitCodeErrorf(dsc.ExitInvalidInput, "unsupported setting_name %q", desired.SettingName)
+	}
+
+	current, err := h.Get(ctx, desired)
+	if err != nil {
+		return desired, err
+	}
+
+	logInfof(MsgWhatIfUpdate, "WorkspaceSetting", "setting_name="+desired.SettingName)
+	return projectWorkspaceSettingUpdate(&desired, &current), nil
 }
 
 func (h *WorkspaceSettingHandler) Delete(_ context.Context, _ WorkspaceSettingState) error {
@@ -531,7 +564,7 @@ func (h *WorkspaceSettingHandler) Export(ctx context.Context, _ WorkspaceSetting
 		state, err := h.Get(ctx, WorkspaceSettingState{SettingName: name})
 		if err != nil {
 			// Skip settings where we don't have permission.
-			dsc.Logger.Infof(MsgSkipping, "WorkspaceSetting", name, err)
+			logInfof(MsgSkipping, "WorkspaceSetting", name, err)
 			continue
 		}
 		all = append(all, state)

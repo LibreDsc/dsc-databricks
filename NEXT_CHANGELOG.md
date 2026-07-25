@@ -4,41 +4,59 @@
 
 ### Notable Changes
 
-- Rebuilt all resources on the released
-  [dsc-go-rdk](https://github.com/LibreDsc/dsc-go-rdk) v0.1.0 library,
-  replacing the in-house `internal/dsc` framework. Handlers now implement the
-  rdk capability interfaces (`Gettable`, `Settable`, `Testable`, `Deletable`,
-  `Exportable`) over a single state struct per resource, and the Cobra CLI was
-  replaced by the rdk `Manager` host.
-- Manifest generation now produces one
-  `libredsc.databricks.<name>.dsc.resource.json` file per resource (via
-  `manifest --out-dir`) instead of the aggregate
-  `LibreDsc.Databricks.dsc.manifests.json`.
-- `changedProperties` and `differingProperties` no longer include canonical
-  (underscore-prefixed) properties such as `_exist`, except that custom test
-  implementations still report `_exist` when the instance is missing.
-- Read-only fields (cluster `state`/`state_message`, SQL warehouse
-  `state`/`num_clusters`, workspace setting `etag`, repo
-  `id`/`head_commit_id`, catalog
-  `storage_location`/`catalog_type`/`metastore_id`) now appear in the resource
-  schemas as optional properties.
-- Enum constraints added to schemas for `SecretAcl.permission`,
-  `SqlWarehousePermission.permission_level`, `Catalog.isolation_mode`, and
-  `Catalog.enable_predictive_optimization`.
-- Deleting an instance that does not exist now always succeeds (previously
+- **Preview changes before applying them.** Every resource now supports
+  what-if: add `-w` to `dsc config set` and the result shows exactly what
+  would be created or updated — including the predicted `afterState` and
+  `changedProperties` — without touching your workspace. The prediction is
+  computed natively by each resource (no API calls that modify anything),
+  so it is more accurate than the DSC engine's synthetic fallback and does
+  not leak `_metadata` into `changedProperties`. `dsc resource list` shows
+  the new `whatIf` capability on all 15 resources.
+- **Log messages can now be translated.** Diagnostic output (shown with
+  `DSC_TRACE_LEVEL=info` or higher) goes through a localization layer.
+  Set `DSC_DATABRICKS_LANG` (or rely on `LC_ALL`/`LANG`) to pick a
+  language; English ships today and new languages only need a translation
+  table, no code changes.
+- **Deleting something that is already gone now succeeds.** Previously
   User, AccountUser, Group, ServicePrincipal, ClusterPolicy, Cluster, and
-  SqlWarehouse returned a not-found error).
-- Authoring guidance moved to `CLAUDE.md`;
-  `.github/instructions/dsc-databricks.instructions.md` now points there.
-- Added Go unit tests for validation helpers, request builders, SCIM
-  conversions, principal matching, and manifest/schema parity.
-- Added `tests/SqlWarehousePermission.Tests.ps1` E2E suite.
+  SqlWarehouse returned a not-found error, which could fail a
+  configuration run that was already in the desired state.
+- **Richer schemas.** Read-only fields you get back from the API (cluster
+  `state`/`state_message`, SQL warehouse `state`/`num_clusters`, workspace
+  setting `etag`, repo `id`/`head_commit_id`, catalog
+  `storage_location`/`catalog_type`/`metastore_id`) are now documented as
+  optional properties in `dsc resource schema` output, and enum values are
+  listed for `SecretAcl.permission`,
+  `SqlWarehousePermission.permission_level`, `Catalog.isolation_mode`, and
+  `Catalog.enable_predictive_optimization` — so editors with schema
+  completion can offer the valid values.
+- **Heads-up if you script against set/test output:** `changedProperties`
+  and `differingProperties` no longer include underscore-prefixed
+  properties such as `_exist` (custom tests still report `_exist` when the
+  instance is missing). Update any automation that looked for `_exist` in
+  those arrays.
+- **Manifest layout changed for discovery.** The build now produces one
+  `libredsc.databricks.<name>.dsc.resource.json` file per resource instead
+  of the single aggregate `LibreDsc.Databricks.dsc.manifests.json`. Point
+  `DSC_RESOURCE_PATH` at the output directory as before; if you copied or
+  parsed the old aggregate file, switch to the per-resource files.
+- **Under the hood:** all resources were rebuilt on the released
+  [dsc-go-rdk](https://github.com/LibreDsc/dsc-go-rdk) v0.1.0 library,
+  replacing the in-house framework and Cobra CLI. Day-to-day usage
+  (`get`/`set`/`test`/`delete`/`export`/`schema`/`manifest`) is unchanged.
+- **For contributors:** authoring guidance now lives in `CLAUDE.md`
+  (the `.github/instructions` file points there). Test coverage grew with
+  Go unit tests (validation, request builders, SCIM conversions, what-if
+  projections, localization, manifest/schema parity) and Pester `WhatIf`
+  contexts in every suite via the new `Invoke-DscWhatIf` helper;
+  SqlWarehousePermission is covered inline in the SqlWarehouse suite.
 
 ### Bug Fixes
 
 ### Dependency Updates
 
-- Added `github.com/LibreDsc/dsc-go-rdk` v0.1.0; removed `spf13/cobra` and
+- Added `github.com/LibreDsc/dsc-go-rdk` v0.1.0 and promoted
+  `golang.org/x/text` to a direct dependency; removed `spf13/cobra` and
   `spf13/pflag`. Go toolchain bumped to 1.26.
 - E2E test suites migrated to Pester v6 (`Invoke-Pester` now uses
   `New-PesterConfiguration` with an explicit `tests/` path; CI installs

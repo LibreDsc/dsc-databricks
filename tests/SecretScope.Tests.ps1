@@ -48,6 +48,7 @@ Describe 'Databricks SecretScope Resource' -Tag 'Databricks', 'SecretScope' -Ski
             $result.capabilities | Should -Contain 'set'
             $result.capabilities | Should -Contain 'delete'
             $result.capabilities | Should -Contain 'export'
+            $result.capabilities | Should -Contain 'whatIf'
         }
     }
 
@@ -133,6 +134,33 @@ Describe 'Databricks SecretScope Resource' -Tag 'Databricks', 'SecretScope' -Ski
             $result = dsc resource export -r LibreDsc.Databricks/SecretScope | ConvertFrom-Json
             $found = $result.resources | Where-Object { $_.properties.scope -eq $script:testScopeName }
             $found | Should -Not -BeNullOrEmpty
+        }
+    }
+
+    Context 'WhatIf Operation' -Tag 'WhatIf' {
+        It 'should predict scope creation without creating anything' {
+            $script:whatIfScopeName = New-TestScopeName
+            $result = Invoke-DscWhatIf -ResourceType 'LibreDsc.Databricks/SecretScope' `
+                -Properties @{ scope = $script:whatIfScopeName }
+            $LASTEXITCODE | Should -Be 0
+            $result.metadata.'Microsoft.DSC'.executionType | Should -Be 'whatIf'
+            $result.results[0].result.afterState._exist | Should -Be $true
+            $result.results[0].result.afterState.scope | Should -Be $script:whatIfScopeName
+            $result.results[0].result.changedProperties | Should -Not -Contain '_metadata'
+        }
+
+        It 'should not have created the scope' {
+            $inputJson = @{ scope = $script:whatIfScopeName } | ConvertTo-Json -Compress
+            $get = dsc resource get -r LibreDsc.Databricks/SecretScope --input $inputJson | ConvertFrom-Json
+            $get.actualState._exist | Should -Be $false
+        }
+
+        It 'should predict no changes for the existing scope' {
+            $result = Invoke-DscWhatIf -ResourceType 'LibreDsc.Databricks/SecretScope' `
+                -Properties @{ scope = $script:testScopeName }
+            $LASTEXITCODE | Should -Be 0
+            $result.results[0].result.afterState._exist | Should -Be $true
+            $result.results[0].result.afterState.scope | Should -Be $script:testScopeName
         }
     }
 

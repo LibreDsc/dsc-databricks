@@ -62,23 +62,23 @@ func (h *ServicePrincipalHandler) Get(ctx context.Context, in ServicePrincipalSt
 	}
 
 	if in.ID != "" {
-		dsc.Logger.Debugf(MsgLookup, "ServicePrincipal", "id="+in.ID)
+		logDebugf(MsgLookup, "ServicePrincipal", "id="+in.ID)
 		sp, err := w.ServicePrincipalsV2.Get(ctx, iam.GetServicePrincipalRequest{Id: in.ID})
 		if err != nil {
-			dsc.Logger.Infof(MsgNotFound, "ServicePrincipal", "id="+in.ID)
+			logInfof(MsgNotFound, "ServicePrincipal", "id="+in.ID)
 			return dsc.NotFound(ServicePrincipalState{ID: in.ID, DisplayName: in.DisplayName}, "ServicePrincipal", "id="+in.ID)
 		}
 		return spToState(sp), nil
 	}
 
-	dsc.Logger.Debugf(MsgLookup, "ServicePrincipal", "display_name="+in.DisplayName)
+	logDebugf(MsgLookup, "ServicePrincipal", "display_name="+in.DisplayName)
 	sps := w.ServicePrincipalsV2.List(ctx, iam.ListServicePrincipalsRequest{
 		Filter: "displayName eq \"" + in.DisplayName + "\"",
 	})
 
 	sp, err := sps.Next(ctx)
 	if err != nil {
-		dsc.Logger.Infof(MsgNotFound, "ServicePrincipal", "display_name="+in.DisplayName)
+		logInfof(MsgNotFound, "ServicePrincipal", "display_name="+in.DisplayName)
 		return dsc.NotFound(ServicePrincipalState{DisplayName: in.DisplayName}, "ServicePrincipal", "display_name="+in.DisplayName)
 	}
 	return spToState(&sp), nil
@@ -100,7 +100,7 @@ func (h *ServicePrincipalHandler) Set(ctx context.Context, desired ServicePrinci
 	}
 
 	if current.ShouldExist() {
-		dsc.Logger.Infof(MsgUpdate, "ServicePrincipal", "id="+current.ID)
+		logInfof(MsgUpdate, "ServicePrincipal", "id="+current.ID)
 		// Service principal already exists — GET the full object, overlay desired
 		// fields, then PUT back via Update (SCIM PUT requires the complete representation).
 		full, err := w.ServicePrincipalsV2.Get(ctx, iam.GetServicePrincipalRequest{Id: current.ID})
@@ -139,7 +139,7 @@ func (h *ServicePrincipalHandler) Set(ctx context.Context, desired ServicePrinci
 		}
 		desired.ID = current.ID
 	} else {
-		dsc.Logger.Infof(MsgCreate, "ServicePrincipal", "display_name="+desired.DisplayName)
+		logInfof(MsgCreate, "ServicePrincipal", "display_name="+desired.DisplayName)
 		// Service principal does not exist — create it.
 		if err := requireFields(field{"display_name", desired.DisplayName}); err != nil {
 			return desired, err
@@ -159,6 +159,59 @@ func (h *ServicePrincipalHandler) Set(ctx context.Context, desired ServicePrinci
 	}
 
 	return h.Get(ctx, desired)
+}
+
+// projectServicePrincipalUpdate mirrors Set's SCIM overlay: non-empty desired
+// strings and non-empty slices win, active is always taken from desired (Set
+// force-sends it), and the id carries over from the current state.
+func projectServicePrincipalUpdate(desired, current *ServicePrincipalState) ServicePrincipalState {
+	projected := *current
+	if desired.DisplayName != "" {
+		projected.DisplayName = desired.DisplayName
+	}
+	projected.Active = desired.Active
+	if desired.ApplicationID != "" {
+		projected.ApplicationID = desired.ApplicationID
+	}
+	if desired.ExternalID != "" {
+		projected.ExternalID = desired.ExternalID
+	}
+	if len(desired.Entitlements) > 0 {
+		projected.Entitlements = desired.Entitlements
+	}
+	if len(desired.Roles) > 0 {
+		projected.Roles = desired.Roles
+	}
+	projected.SetExist(true)
+	return projected
+}
+
+// SetWhatIf predicts the state Set would produce without touching the
+// service principal.
+func (h *ServicePrincipalHandler) SetWhatIf(ctx context.Context, desired ServicePrincipalState) (ServicePrincipalState, error) {
+	if err := requireAtLeastOne("id or display_name", desired.ID, desired.DisplayName); err != nil {
+		return desired, err
+	}
+
+	current, err := h.Get(ctx, desired)
+	if err != nil {
+		return desired, err
+	}
+
+	if current.ShouldExist() {
+		logInfof(MsgWhatIfUpdate, "ServicePrincipal", "id="+current.ID)
+		return projectServicePrincipalUpdate(&desired, &current), nil
+	}
+
+	if err := requireFields(field{"display_name", desired.DisplayName}); err != nil {
+		return desired, err
+	}
+	logInfof(MsgWhatIfCreate, "ServicePrincipal", "display_name="+desired.DisplayName)
+	// The server-assigned id is unknown before creation.
+	projected := desired
+	projected.ID = ""
+	projected.SetExist(true)
+	return projected, nil
 }
 
 func (h *ServicePrincipalHandler) Test(ctx context.Context, desired ServicePrincipalState) (dsc.TestResult[ServicePrincipalState], error) {
@@ -188,11 +241,11 @@ func (h *ServicePrincipalHandler) Delete(ctx context.Context, in ServicePrincipa
 	}
 
 	if in.ID != "" {
-		dsc.Logger.Debugf(MsgDelete, "ServicePrincipal", "id="+in.ID)
+		logDebugf(MsgDelete, "ServicePrincipal", "id="+in.ID)
 		return w.ServicePrincipalsV2.Delete(ctx, iam.DeleteServicePrincipalRequest{Id: in.ID})
 	}
 
-	dsc.Logger.Debugf(MsgDelete, "ServicePrincipal", "display_name="+in.DisplayName)
+	logDebugf(MsgDelete, "ServicePrincipal", "display_name="+in.DisplayName)
 	sps := w.ServicePrincipalsV2.List(ctx, iam.ListServicePrincipalsRequest{
 		Filter: "displayName eq \"" + in.DisplayName + "\"",
 	})
@@ -200,7 +253,7 @@ func (h *ServicePrincipalHandler) Delete(ctx context.Context, in ServicePrincipa
 	sp, err := sps.Next(ctx)
 	if err != nil {
 		// Already absent — deleting a missing instance succeeds.
-		dsc.Logger.Infof(MsgNotFound, "ServicePrincipal", "display_name="+in.DisplayName)
+		logInfof(MsgNotFound, "ServicePrincipal", "display_name="+in.DisplayName)
 		return nil
 	}
 	return w.ServicePrincipalsV2.Delete(ctx, iam.DeleteServicePrincipalRequest{Id: sp.Id})
@@ -212,7 +265,7 @@ func (h *ServicePrincipalHandler) Export(ctx context.Context, _ ServicePrincipal
 		return nil, err
 	}
 
-	dsc.Logger.Debugf(MsgListAll, "ServicePrincipal")
+	logDebugf(MsgListAll, "ServicePrincipal")
 	sps, err := w.ServicePrincipalsV2.ListAll(ctx, iam.ListServicePrincipalsRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list service principals: %w", err)

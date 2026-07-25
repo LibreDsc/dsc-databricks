@@ -61,10 +61,10 @@ func (h *RepoHandler) Get(ctx context.Context, in RepoState) (RepoState, error) 
 		return in, err
 	}
 
-	dsc.Logger.Debugf(MsgLookup, "Repo", "path="+in.Path)
+	logDebugf(MsgLookup, "Repo", "path="+in.Path)
 	info, err := w.Repos.GetByPath(ctx, in.Path)
 	if err != nil {
-		dsc.Logger.Infof(MsgNotFound, "Repo", "path="+in.Path)
+		logInfof(MsgNotFound, "Repo", "path="+in.Path)
 		// Echo back the requested settings so the missing state is self-describing.
 		return dsc.NotFound(RepoState{
 			Path:     in.Path,
@@ -92,7 +92,7 @@ func (h *RepoHandler) Set(ctx context.Context, desired RepoState) (RepoState, er
 	}
 
 	if !current.ShouldExist() {
-		dsc.Logger.Infof(MsgCreate, "Repo", "path="+desired.Path)
+		logInfof(MsgCreate, "Repo", "path="+desired.Path)
 		if err := requireFields(
 			field{"url", desired.URL},
 			field{"provider", desired.Provider},
@@ -133,7 +133,7 @@ func (h *RepoHandler) Set(ctx context.Context, desired RepoState) (RepoState, er
 	}
 
 	// Repo already exists — update the branch if requested and different.
-	dsc.Logger.Infof(MsgUpdate, "Repo", "path="+desired.Path)
+	logInfof(MsgUpdate, "Repo", "path="+desired.Path)
 	afterState := current
 	if desired.Branch != "" && desired.Branch != current.Branch {
 		if err := w.Repos.Update(ctx, workspace.UpdateRepoRequest{
@@ -145,6 +145,57 @@ func (h *RepoHandler) Set(ctx context.Context, desired RepoState) (RepoState, er
 		afterState.Branch = desired.Branch
 	}
 	return afterState, nil
+}
+
+// projectRepoCreate returns the state Set's create path would produce.
+// id and head_commit_id are computed by the server and stay zero; when no
+// branch is requested the repository default branch is unknown ahead of time.
+func projectRepoCreate(desired *RepoState) RepoState {
+	projected := RepoState{
+		Path:     desired.Path,
+		URL:      desired.URL,
+		Provider: desired.Provider,
+		Branch:   desired.Branch,
+	}
+	projected.SetExist(true)
+	return projected
+}
+
+// projectRepoUpdate mirrors Set's update path: only the branch changes, and
+// only when requested and different.
+func projectRepoUpdate(desired, current *RepoState) RepoState {
+	projected := *current
+	if desired.Branch != "" && desired.Branch != current.Branch {
+		projected.Branch = desired.Branch
+	}
+	projected.SetExist(true)
+	return projected
+}
+
+// SetWhatIf predicts the state Set would produce without touching the repo.
+func (h *RepoHandler) SetWhatIf(ctx context.Context, desired RepoState) (RepoState, error) {
+	if err := requireFields(field{"path", desired.Path}); err != nil {
+		return desired, err
+	}
+
+	current, err := h.Get(ctx, desired)
+	if err != nil {
+		return desired, err
+	}
+
+	if !current.ShouldExist() {
+		if err := requireFields(
+			field{"url", desired.URL},
+			field{"provider", desired.Provider},
+		); err != nil {
+			return desired, err
+		}
+		logInfof(MsgWhatIfCreate, "Repo", "path="+desired.Path)
+		return projectRepoCreate(&desired), nil
+	}
+
+	logInfof(MsgWhatIfUpdate, "Repo", "path="+desired.Path)
+	return projectRepoUpdate(&desired, &current), nil
 }
 
 func (h *RepoHandler) Delete(ctx context.Context, in RepoState) error {
@@ -165,7 +216,7 @@ func (h *RepoHandler) Delete(ctx context.Context, in RepoState) error {
 		return err
 	}
 
-	dsc.Logger.Debugf(MsgDelete, "Repo", "path="+in.Path)
+	logDebugf(MsgDelete, "Repo", "path="+in.Path)
 	return w.Repos.DeleteByRepoId(ctx, current.ID)
 }
 
@@ -175,7 +226,7 @@ func (h *RepoHandler) Export(ctx context.Context, _ RepoState) ([]RepoState, err
 		return nil, err
 	}
 
-	dsc.Logger.Debugf(MsgListAll, "Repo")
+	logDebugf(MsgListAll, "Repo")
 	repos, err := w.Repos.ListAll(ctx, workspace.ListReposRequest{})
 	if err != nil {
 		return nil, err

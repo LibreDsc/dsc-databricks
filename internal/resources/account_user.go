@@ -57,23 +57,23 @@ func (h *AccountUserHandler) Get(ctx context.Context, in AccountUserState) (Acco
 	}
 
 	if in.ID != "" {
-		dsc.Logger.Debugf(MsgLookup, "AccountUser", "id="+in.ID)
+		logDebugf(MsgLookup, "AccountUser", "id="+in.ID)
 		user, err := a.UsersV2.Get(ctx, iam.GetAccountUserRequest{Id: in.ID})
 		if err != nil {
-			dsc.Logger.Infof(MsgNotFound, "AccountUser", "id="+in.ID)
+			logInfof(MsgNotFound, "AccountUser", "id="+in.ID)
 			return dsc.NotFound(AccountUserState{ID: in.ID, UserName: in.UserName}, "AccountUser", "id="+in.ID)
 		}
 		return accountUserToState(user), nil
 	}
 
-	dsc.Logger.Debugf(MsgLookup, "AccountUser", "user_name="+in.UserName)
+	logDebugf(MsgLookup, "AccountUser", "user_name="+in.UserName)
 	users := a.UsersV2.List(ctx, iam.ListAccountUsersRequest{
 		Filter: "userName eq \"" + in.UserName + "\"",
 	})
 
 	user, err := users.Next(ctx)
 	if err != nil {
-		dsc.Logger.Infof(MsgNotFound, "AccountUser", "user_name="+in.UserName)
+		logInfof(MsgNotFound, "AccountUser", "user_name="+in.UserName)
 		return dsc.NotFound(AccountUserState{UserName: in.UserName}, "AccountUser", "user_name="+in.UserName)
 	}
 	return accountUserToState(&user), nil
@@ -95,7 +95,7 @@ func (h *AccountUserHandler) Set(ctx context.Context, desired AccountUserState) 
 	}
 
 	if current.ShouldExist() {
-		dsc.Logger.Infof(MsgUpdate, "AccountUser", "id="+current.ID)
+		logInfof(MsgUpdate, "AccountUser", "id="+current.ID)
 		// User already exists — GET the full user, overlay desired fields, then PUT back.
 		fullUser, err := a.UsersV2.Get(ctx, iam.GetAccountUserRequest{Id: current.ID})
 		if err != nil {
@@ -117,7 +117,7 @@ func (h *AccountUserHandler) Set(ctx context.Context, desired AccountUserState) 
 		}
 		desired.ID = current.ID
 	} else {
-		dsc.Logger.Infof(MsgCreate, "AccountUser", "user_name="+desired.UserName)
+		logInfof(MsgCreate, "AccountUser", "user_name="+desired.UserName)
 		// User doesn't exist — create it.
 		if err := requireFields(field{"user_name", desired.UserName}); err != nil {
 			return desired, err
@@ -128,6 +128,52 @@ func (h *AccountUserHandler) Set(ctx context.Context, desired AccountUserState) 
 	}
 
 	return h.Get(ctx, desired)
+}
+
+// projectAccountUserUpdate mirrors Set's SCIM overlay: non-empty desired
+// strings and non-empty slices win, active is always taken from desired (Set
+// force-sends it), and the id carries over from the current state.
+func projectAccountUserUpdate(desired, current *AccountUserState) AccountUserState {
+	projected := *current
+	if desired.DisplayName != "" {
+		projected.DisplayName = desired.DisplayName
+	}
+	projected.Active = desired.Active
+	if len(desired.Emails) > 0 {
+		projected.Emails = desired.Emails
+	}
+	if len(desired.Roles) > 0 {
+		projected.Roles = desired.Roles
+	}
+	projected.SetExist(true)
+	return projected
+}
+
+// SetWhatIf predicts the state Set would produce without touching the user.
+func (h *AccountUserHandler) SetWhatIf(ctx context.Context, desired AccountUserState) (AccountUserState, error) {
+	if err := requireAtLeastOne("id or user_name", desired.ID, desired.UserName); err != nil {
+		return desired, err
+	}
+
+	current, err := h.Get(ctx, desired)
+	if err != nil {
+		return desired, err
+	}
+
+	if current.ShouldExist() {
+		logInfof(MsgWhatIfUpdate, "AccountUser", "id="+current.ID)
+		return projectAccountUserUpdate(&desired, &current), nil
+	}
+
+	if err := requireFields(field{"user_name", desired.UserName}); err != nil {
+		return desired, err
+	}
+	logInfof(MsgWhatIfCreate, "AccountUser", "user_name="+desired.UserName)
+	// The server-assigned id is unknown before creation.
+	projected := desired
+	projected.ID = ""
+	projected.SetExist(true)
+	return projected, nil
 }
 
 func (h *AccountUserHandler) Test(ctx context.Context, desired AccountUserState) (dsc.TestResult[AccountUserState], error) {
@@ -157,11 +203,11 @@ func (h *AccountUserHandler) Delete(ctx context.Context, in AccountUserState) er
 	}
 
 	if in.ID != "" {
-		dsc.Logger.Debugf(MsgDelete, "AccountUser", "id="+in.ID)
+		logDebugf(MsgDelete, "AccountUser", "id="+in.ID)
 		return a.UsersV2.Delete(ctx, iam.DeleteAccountUserRequest{Id: in.ID})
 	}
 
-	dsc.Logger.Debugf(MsgDelete, "AccountUser", "user_name="+in.UserName)
+	logDebugf(MsgDelete, "AccountUser", "user_name="+in.UserName)
 	users := a.UsersV2.List(ctx, iam.ListAccountUsersRequest{
 		Filter: "userName eq \"" + in.UserName + "\"",
 	})
@@ -169,7 +215,7 @@ func (h *AccountUserHandler) Delete(ctx context.Context, in AccountUserState) er
 	user, err := users.Next(ctx)
 	if err != nil {
 		// Already absent — deleting a missing instance succeeds.
-		dsc.Logger.Infof(MsgNotFound, "AccountUser", "user_name="+in.UserName)
+		logInfof(MsgNotFound, "AccountUser", "user_name="+in.UserName)
 		return nil
 	}
 	return a.UsersV2.Delete(ctx, iam.DeleteAccountUserRequest{Id: user.Id})
@@ -181,7 +227,7 @@ func (h *AccountUserHandler) Export(ctx context.Context, _ AccountUserState) ([]
 		return nil, err
 	}
 
-	dsc.Logger.Debugf(MsgListAll, "AccountUser")
+	logDebugf(MsgListAll, "AccountUser")
 	users, err := a.UsersV2.ListAll(ctx, iam.ListAccountUsersRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list account users: %w", err)

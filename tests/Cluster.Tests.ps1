@@ -66,6 +66,7 @@ Describe 'Databricks Cluster Resource' -Tag 'Databricks', 'Cluster' -Skip:(!$scr
             $result.capabilities | Should -Contain 'set'
             $result.capabilities | Should -Contain 'delete'
             $result.capabilities | Should -Contain 'export'
+            $result.capabilities | Should -Contain 'whatIf'
         }
     }
 
@@ -278,6 +279,26 @@ Describe 'Databricks Cluster Resource' -Tag 'Databricks', 'Cluster' -Skip:(!$scr
             $result = dsc resource export -r LibreDsc.Databricks/Cluster | ConvertFrom-Json
             $c = $result.resources | Where-Object { $_.properties.cluster_id -eq $script:testClusterId }
             $c.properties.state | Should -Not -BeNullOrEmpty
+        }
+    }
+
+    Context 'WhatIf Operation' -Tag 'WhatIf' {
+        It 'should predict an autotermination change without applying it' {
+            $result = Invoke-DscWhatIf -ResourceType 'LibreDsc.Databricks/Cluster' -Properties @{
+                cluster_id              = $script:testClusterId
+                autotermination_minutes = 25
+            }
+            $LASTEXITCODE | Should -Be 0
+            $result.metadata.'Microsoft.DSC'.executionType | Should -Be 'whatIf'
+            $result.results[0].result.afterState._exist | Should -Be $true
+            $result.results[0].result.afterState.autotermination_minutes | Should -Be 25
+            $result.results[0].result.afterState.cluster_id | Should -Be $script:testClusterId
+        }
+
+        It 'should not have changed the real cluster' {
+            $inputJson = @{ cluster_id = $script:testClusterId } | ConvertTo-Json -Compress
+            $get = dsc resource get -r LibreDsc.Databricks/Cluster --input $inputJson | ConvertFrom-Json
+            $get.actualState.autotermination_minutes | Should -Be 30
         }
     }
 

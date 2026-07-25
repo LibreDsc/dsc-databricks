@@ -51,6 +51,7 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
             $result.capabilities | Should -Contain 'set'
             $result.capabilities | Should -Contain 'delete'
             $result.capabilities | Should -Contain 'export'
+            $result.capabilities | Should -Contain 'whatIf'
         }
     }
 
@@ -252,6 +253,7 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
             $result.capabilities | Should -Contain 'set'
             $result.capabilities | Should -Contain 'delete'
             $result.capabilities | Should -Contain 'export'
+            $result.capabilities | Should -Contain 'whatIf'
         }
     }
 
@@ -373,6 +375,30 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
         }
     }
 
+    Context 'SqlWarehousePermission - WhatIf Operation' -Tag 'WhatIf', 'SqlWarehousePermission' {
+        It 'should predict a permission grant without applying it' {
+            $result = Invoke-DscWhatIf -ResourceType 'LibreDsc.Databricks/SqlWarehousePermission' -Properties @{
+                warehouse_id     = $script:testWarehouseId
+                group_name       = 'admins'
+                permission_level = 'CAN_MONITOR'
+            }
+            $LASTEXITCODE | Should -Be 0
+            $result.metadata.'Microsoft.DSC'.executionType | Should -Be 'whatIf'
+            $result.results[0].result.afterState._exist | Should -Be $true
+            $result.results[0].result.afterState.group_name | Should -Be 'admins'
+            $result.results[0].result.afterState.permission_level | Should -Be 'CAN_MONITOR'
+        }
+
+        It 'should not have granted the permission' {
+            $inputJson = @{
+                warehouse_id = $script:testWarehouseId
+                group_name   = 'admins'
+            } | ConvertTo-Json -Compress
+            $get = dsc resource get -r LibreDsc.Databricks/SqlWarehousePermission --input $inputJson | ConvertFrom-Json
+            $get.actualState._exist | Should -Be $false
+        }
+    }
+
     Context 'SqlWarehousePermission - Delete Operation' -Tag 'Delete', 'SqlWarehousePermission' {
         It 'should delete the permission' {
             $inputJson = @{
@@ -431,6 +457,26 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
             $LASTEXITCODE | Should -Be 0
             $result.afterState._exist | Should -Be $true
             $result.afterState.permission_level | Should -Be 'CAN_USE'
+        }
+    }
+
+    Context 'WhatIf Operation' -Tag 'WhatIf' {
+        It 'should predict an auto stop change without applying it' {
+            $result = Invoke-DscWhatIf -ResourceType 'LibreDsc.Databricks/SqlWarehouse' -Properties @{
+                id             = $script:testWarehouseId
+                auto_stop_mins = 55
+            }
+            $LASTEXITCODE | Should -Be 0
+            $result.metadata.'Microsoft.DSC'.executionType | Should -Be 'whatIf'
+            $result.results[0].result.afterState._exist | Should -Be $true
+            $result.results[0].result.afterState.auto_stop_mins | Should -Be 55
+            $result.results[0].result.afterState.id | Should -Be $script:testWarehouseId
+        }
+
+        It 'should not have changed the real warehouse' {
+            $inputJson = @{ id = $script:testWarehouseId } | ConvertTo-Json -Compress
+            $get = dsc resource get -r LibreDsc.Databricks/SqlWarehouse --input $inputJson | ConvertFrom-Json
+            $get.actualState.auto_stop_mins | Should -Be 30
         }
     }
 

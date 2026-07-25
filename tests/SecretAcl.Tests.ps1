@@ -55,6 +55,7 @@ Describe 'Databricks SecretAcl Resource' -Tag 'Databricks', 'SecretAcl' -Skip:(!
             $result.capabilities | Should -Contain 'set'
             $result.capabilities | Should -Contain 'delete'
             $result.capabilities | Should -Contain 'export'
+            $result.capabilities | Should -Contain 'whatIf'
         }
     }
 
@@ -173,6 +174,27 @@ Describe 'Databricks SecretAcl Resource' -Tag 'Databricks', 'SecretAcl' -Skip:(!
                 $_.properties.scope -eq $script:testScopeName -and $_.properties.principal -eq $script:testPrincipal
             }
             $found | Should -Not -BeNullOrEmpty
+        }
+    }
+
+    Context 'WhatIf Operation' -Tag 'WhatIf' {
+        It 'should predict ACL creation without writing anything' {
+            $result = Invoke-DscWhatIf -ResourceType 'LibreDsc.Databricks/SecretAcl' -Properties @{
+                scope      = $script:testScopeName
+                principal  = 'admins'
+                permission = 'WRITE'
+            }
+            $LASTEXITCODE | Should -Be 0
+            $result.metadata.'Microsoft.DSC'.executionType | Should -Be 'whatIf'
+            $result.results[0].result.afterState._exist | Should -Be $true
+            $result.results[0].result.afterState.principal | Should -Be 'admins'
+            $result.results[0].result.afterState.permission | Should -Be 'WRITE'
+        }
+
+        It 'should not have created the ACL' {
+            $inputJson = @{ scope = $script:testScopeName; principal = 'admins' } | ConvertTo-Json -Compress
+            $get = dsc resource get -r LibreDsc.Databricks/SecretAcl --input $inputJson | ConvertFrom-Json
+            $get.actualState._exist | Should -Be $false
         }
     }
 

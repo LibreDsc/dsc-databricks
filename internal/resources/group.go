@@ -60,16 +60,16 @@ func (h *GroupHandler) Get(ctx context.Context, in GroupState) (GroupState, erro
 	}
 
 	if in.ID != "" {
-		dsc.Logger.Debugf(MsgLookup, "Group", "id="+in.ID)
+		logDebugf(MsgLookup, "Group", "id="+in.ID)
 		g, err := w.GroupsV2.Get(ctx, iam.GetGroupRequest{Id: in.ID})
 		if err != nil {
-			dsc.Logger.Infof(MsgNotFound, "Group", "id="+in.ID)
+			logInfof(MsgNotFound, "Group", "id="+in.ID)
 			return dsc.NotFound(GroupState{ID: in.ID, DisplayName: in.DisplayName}, "Group", "id="+in.ID)
 		}
 		return groupToState(g), nil
 	}
 
-	dsc.Logger.Debugf(MsgLookup, "Group", "display_name="+in.DisplayName)
+	logDebugf(MsgLookup, "Group", "display_name="+in.DisplayName)
 	groups, err := w.GroupsV2.ListAll(ctx, iam.ListGroupsRequest{})
 	if err == nil {
 		for _, g := range groups {
@@ -82,7 +82,7 @@ func (h *GroupHandler) Get(ctx context.Context, in GroupState) (GroupState, erro
 			}
 		}
 	}
-	dsc.Logger.Infof(MsgNotFound, "Group", "display_name="+in.DisplayName)
+	logInfof(MsgNotFound, "Group", "display_name="+in.DisplayName)
 	return dsc.NotFound(GroupState{DisplayName: in.DisplayName}, "Group", "display_name="+in.DisplayName)
 }
 
@@ -102,7 +102,7 @@ func (h *GroupHandler) Set(ctx context.Context, desired GroupState) (GroupState,
 	}
 
 	if current.ShouldExist() {
-		dsc.Logger.Infof(MsgUpdate, "Group", "id="+current.ID)
+		logInfof(MsgUpdate, "Group", "id="+current.ID)
 		// Group exists — build an UpdateGroupRequest from desired state, overlaying
 		// onto the current full state so the SCIM PUT is complete.
 		full, err := w.GroupsV2.Get(ctx, iam.GetGroupRequest{Id: current.ID})
@@ -150,7 +150,7 @@ func (h *GroupHandler) Set(ctx context.Context, desired GroupState) (GroupState,
 		return groupToState(&afterFull), nil
 	}
 
-	dsc.Logger.Infof(MsgCreate, "Group", "display_name="+desired.DisplayName)
+	logInfof(MsgCreate, "Group", "display_name="+desired.DisplayName)
 	// Group does not exist — create it.
 	if err := requireFields(field{"display_name", desired.DisplayName}); err != nil {
 		return desired, err
@@ -167,6 +167,56 @@ func (h *GroupHandler) Set(ctx context.Context, desired GroupState) (GroupState,
 	}
 	// Use the server response directly for the after state — it contains the assigned ID.
 	return groupToState(created), nil
+}
+
+// projectGroupUpdate mirrors Set's SCIM overlay: non-empty desired strings
+// and non-empty slices win; the id carries over from the current state.
+func projectGroupUpdate(desired, current *GroupState) GroupState {
+	projected := *current
+	if desired.DisplayName != "" {
+		projected.DisplayName = desired.DisplayName
+	}
+	if desired.ExternalID != "" {
+		projected.ExternalID = desired.ExternalID
+	}
+	if len(desired.Entitlements) > 0 {
+		projected.Entitlements = desired.Entitlements
+	}
+	if len(desired.Members) > 0 {
+		projected.Members = desired.Members
+	}
+	if len(desired.Roles) > 0 {
+		projected.Roles = desired.Roles
+	}
+	projected.SetExist(true)
+	return projected
+}
+
+// SetWhatIf predicts the state Set would produce without touching the group.
+func (h *GroupHandler) SetWhatIf(ctx context.Context, desired GroupState) (GroupState, error) {
+	if err := requireAtLeastOne("id or display_name", desired.ID, desired.DisplayName); err != nil {
+		return desired, err
+	}
+
+	current, err := h.Get(ctx, desired)
+	if err != nil {
+		return desired, err
+	}
+
+	if current.ShouldExist() {
+		logInfof(MsgWhatIfUpdate, "Group", "id="+current.ID)
+		return projectGroupUpdate(&desired, &current), nil
+	}
+
+	if err := requireFields(field{"display_name", desired.DisplayName}); err != nil {
+		return desired, err
+	}
+	logInfof(MsgWhatIfCreate, "Group", "display_name="+desired.DisplayName)
+	// The server-assigned id is unknown before creation.
+	projected := desired
+	projected.ID = ""
+	projected.SetExist(true)
+	return projected, nil
 }
 
 func (h *GroupHandler) Test(ctx context.Context, desired GroupState) (dsc.TestResult[GroupState], error) {
@@ -196,11 +246,11 @@ func (h *GroupHandler) Delete(ctx context.Context, in GroupState) error {
 	}
 
 	if in.ID != "" {
-		dsc.Logger.Debugf(MsgDelete, "Group", "id="+in.ID)
+		logDebugf(MsgDelete, "Group", "id="+in.ID)
 		return w.GroupsV2.Delete(ctx, iam.DeleteGroupRequest{Id: in.ID})
 	}
 
-	dsc.Logger.Debugf(MsgDelete, "Group", "display_name="+in.DisplayName)
+	logDebugf(MsgDelete, "Group", "display_name="+in.DisplayName)
 	groups, err := w.GroupsV2.ListAll(ctx, iam.ListGroupsRequest{})
 	if err == nil {
 		for _, g := range groups {
@@ -210,7 +260,7 @@ func (h *GroupHandler) Delete(ctx context.Context, in GroupState) error {
 		}
 	}
 	// Already absent — deleting a missing instance succeeds.
-	dsc.Logger.Infof(MsgNotFound, "Group", "display_name="+in.DisplayName)
+	logInfof(MsgNotFound, "Group", "display_name="+in.DisplayName)
 	return nil
 }
 
@@ -220,7 +270,7 @@ func (h *GroupHandler) Export(ctx context.Context, _ GroupState) ([]GroupState, 
 		return nil, err
 	}
 
-	dsc.Logger.Debugf(MsgListAll, "Group")
+	logDebugf(MsgListAll, "Group")
 	groups, err := w.GroupsV2.ListAll(ctx, iam.ListGroupsRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list groups: %w", err)

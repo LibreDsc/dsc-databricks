@@ -49,6 +49,7 @@ Describe 'Databricks Catalog Resource' -Tag 'Databricks', 'Catalog' -Skip:(!$scr
             $result.capabilities | Should -Contain 'set'
             $result.capabilities | Should -Contain 'delete'
             $result.capabilities | Should -Contain 'export'
+            $result.capabilities | Should -Contain 'whatIf'
         }
     }
 
@@ -164,6 +165,27 @@ Describe 'Databricks Catalog Resource' -Tag 'Databricks', 'Catalog' -Skip:(!$scr
             $c = $result.resources | Where-Object { $_.properties.name -eq $script:testCatalogName }
             $c | Should -Not -BeNullOrEmpty
             $c.properties._exist | Should -Be $true
+        }
+    }
+
+    Context 'WhatIf Operation' -Tag 'WhatIf' {
+        It 'should predict catalog creation without creating anything' {
+            $script:whatIfCatalogName = New-TestCatalogName
+            $result = Invoke-DscWhatIf -ResourceType 'LibreDsc.Databricks/Catalog' -Properties @{
+                name    = $script:whatIfCatalogName
+                comment = 'whatif prediction'
+            }
+            $LASTEXITCODE | Should -Be 0
+            $result.metadata.'Microsoft.DSC'.executionType | Should -Be 'whatIf'
+            $result.results[0].result.afterState._exist | Should -Be $true
+            $result.results[0].result.afterState.name | Should -Be $script:whatIfCatalogName
+            $result.results[0].result.afterState.comment | Should -Be 'whatif prediction'
+        }
+
+        It 'should not have created the catalog' {
+            $inputJson = @{ name = $script:whatIfCatalogName } | ConvertTo-Json -Compress
+            $get = dsc resource get -r LibreDsc.Databricks/Catalog --input $inputJson | ConvertFrom-Json
+            $get.actualState._exist | Should -Be $false
         }
     }
 

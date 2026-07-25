@@ -46,7 +46,7 @@ func (h *SecretHandler) Get(ctx context.Context, in SecretState) (SecretState, e
 		return in, err
 	}
 
-	dsc.Logger.Debugf(MsgLookup, "Secret", "key="+in.Key+" scope="+in.Scope)
+	logDebugf(MsgLookup, "Secret", "key="+in.Key+" scope="+in.Scope)
 	secrets := w.Secrets.ListSecrets(ctx, workspace.ListSecretsRequest{Scope: in.Scope})
 	for {
 		secret, err := secrets.Next(ctx)
@@ -59,7 +59,7 @@ func (h *SecretHandler) Get(ctx context.Context, in SecretState) (SecretState, e
 			return state, nil
 		}
 	}
-	dsc.Logger.Infof(MsgNotFound, "Secret", "key="+in.Key+" scope="+in.Scope)
+	logInfof(MsgNotFound, "Secret", "key="+in.Key+" scope="+in.Scope)
 	return dsc.NotFound(SecretState{Scope: in.Scope, Key: in.Key}, "Secret", "key="+in.Key, "scope="+in.Scope)
 }
 
@@ -76,7 +76,7 @@ func (h *SecretHandler) Set(ctx context.Context, desired SecretState) (SecretSta
 		return desired, err
 	}
 
-	dsc.Logger.Infof(MsgPut, "Secret", "key="+desired.Key+" scope="+desired.Scope)
+	logInfof(MsgPut, "Secret", "key="+desired.Key+" scope="+desired.Scope)
 	if err := w.Secrets.PutSecret(ctx, workspace.PutSecret{
 		Scope:       desired.Scope,
 		Key:         desired.Key,
@@ -87,6 +87,22 @@ func (h *SecretHandler) Set(ctx context.Context, desired SecretState) (SecretSta
 	}
 
 	return h.Get(ctx, desired)
+}
+
+// SetWhatIf predicts the state Set would produce without storing the secret.
+func (h *SecretHandler) SetWhatIf(_ context.Context, desired SecretState) (SecretState, error) {
+	if err := requireFields(field{"scope", desired.Scope}, field{"key", desired.Key}); err != nil {
+		return desired, err
+	}
+	if err := requireAtLeastOne("string_value or bytes_value", desired.StringValue, desired.BytesValue); err != nil {
+		return desired, err
+	}
+
+	logInfof(MsgWhatIfPut, "Secret", "key="+desired.Key+" scope="+desired.Scope)
+	// The secret value is write-only and never echoed back.
+	projected := SecretState{Scope: desired.Scope, Key: desired.Key}
+	projected.SetExist(true)
+	return projected, nil
 }
 
 func (h *SecretHandler) Delete(ctx context.Context, in SecretState) error {
@@ -107,7 +123,7 @@ func (h *SecretHandler) Delete(ctx context.Context, in SecretState) error {
 		return err
 	}
 
-	dsc.Logger.Debugf(MsgDelete, "Secret", "key="+in.Key+" scope="+in.Scope)
+	logDebugf(MsgDelete, "Secret", "key="+in.Key+" scope="+in.Scope)
 	return w.Secrets.DeleteSecret(ctx, workspace.DeleteSecret{Scope: in.Scope, Key: in.Key})
 }
 
@@ -117,7 +133,7 @@ func (h *SecretHandler) Export(ctx context.Context, _ SecretState) ([]SecretStat
 		return nil, err
 	}
 
-	dsc.Logger.Debugf(MsgListAll, "Secret")
+	logDebugf(MsgListAll, "Secret")
 	var allSecrets []SecretState
 
 	scopes := w.Secrets.ListScopes(ctx)
@@ -176,7 +192,7 @@ func (h *SecretScopeHandler) Get(ctx context.Context, in SecretScopeState) (Secr
 		return in, err
 	}
 
-	dsc.Logger.Debugf(MsgLookup, "SecretScope", "scope="+in.Scope)
+	logDebugf(MsgLookup, "SecretScope", "scope="+in.Scope)
 	scopes := w.Secrets.ListScopes(ctx)
 	for {
 		scope, err := scopes.Next(ctx)
@@ -189,7 +205,7 @@ func (h *SecretScopeHandler) Get(ctx context.Context, in SecretScopeState) (Secr
 			return state, nil
 		}
 	}
-	dsc.Logger.Infof(MsgNotFound, "SecretScope", "scope="+in.Scope)
+	logInfof(MsgNotFound, "SecretScope", "scope="+in.Scope)
 	return dsc.NotFound(SecretScopeState{Scope: in.Scope}, "SecretScope", "scope="+in.Scope)
 }
 
@@ -208,15 +224,37 @@ func (h *SecretScopeHandler) Set(ctx context.Context, desired SecretScopeState) 
 		if err != nil {
 			return desired, err
 		}
-		dsc.Logger.Infof(MsgCreate, "SecretScope", "scope="+desired.Scope)
+		logInfof(MsgCreate, "SecretScope", "scope="+desired.Scope)
 		if err := w.Secrets.CreateScope(ctx, workspace.CreateScope{Scope: desired.Scope}); err != nil {
 			return desired, err
 		}
 	} else {
-		dsc.Logger.Debugf(MsgAlreadyExists, "SecretScope", "scope="+desired.Scope)
+		logDebugf(MsgAlreadyExists, "SecretScope", "scope="+desired.Scope)
 	}
 
 	return h.Get(ctx, desired)
+}
+
+// SetWhatIf predicts the state Set would produce without creating the scope.
+func (h *SecretScopeHandler) SetWhatIf(ctx context.Context, desired SecretScopeState) (SecretScopeState, error) {
+	if err := requireFields(field{"scope", desired.Scope}); err != nil {
+		return desired, err
+	}
+
+	current, err := h.Get(ctx, desired)
+	if err != nil {
+		return desired, err
+	}
+	if current.ShouldExist() {
+		logDebugf(MsgAlreadyExists, "SecretScope", "scope="+desired.Scope)
+		return current, nil
+	}
+
+	logInfof(MsgWhatIfCreate, "SecretScope", "scope="+desired.Scope)
+	// CreateScope without a backend always produces a DATABRICKS-backed scope.
+	projected := SecretScopeState{Scope: desired.Scope, BackendType: "DATABRICKS"}
+	projected.SetExist(true)
+	return projected, nil
 }
 
 func (h *SecretScopeHandler) Test(ctx context.Context, desired SecretScopeState) (dsc.TestResult[SecretScopeState], error) {
@@ -253,7 +291,7 @@ func (h *SecretScopeHandler) Delete(ctx context.Context, in SecretScopeState) er
 		return err
 	}
 
-	dsc.Logger.Debugf(MsgDelete, "SecretScope", "scope="+in.Scope)
+	logDebugf(MsgDelete, "SecretScope", "scope="+in.Scope)
 	return w.Secrets.DeleteScope(ctx, workspace.DeleteScope{Scope: in.Scope})
 }
 
@@ -263,7 +301,7 @@ func (h *SecretScopeHandler) Export(ctx context.Context, _ SecretScopeState) ([]
 		return nil, err
 	}
 
-	dsc.Logger.Debugf(MsgListAll, "SecretScope")
+	logDebugf(MsgListAll, "SecretScope")
 	var allScopes []SecretScopeState
 
 	scopes := w.Secrets.ListScopes(ctx)
@@ -316,10 +354,10 @@ func (h *SecretAclHandler) Get(ctx context.Context, in SecretAclState) (SecretAc
 		return in, err
 	}
 
-	dsc.Logger.Debugf(MsgLookup, "SecretAcl", "scope="+in.Scope+" principal="+in.Principal)
+	logDebugf(MsgLookup, "SecretAcl", "scope="+in.Scope+" principal="+in.Principal)
 	acl, err := w.Secrets.GetAcl(ctx, workspace.GetAclRequest{Scope: in.Scope, Principal: in.Principal})
 	if err != nil {
-		dsc.Logger.Infof(MsgNotFound, "SecretAcl", "scope="+in.Scope+" principal="+in.Principal)
+		logInfof(MsgNotFound, "SecretAcl", "scope="+in.Scope+" principal="+in.Principal)
 		return dsc.NotFound(SecretAclState{Scope: in.Scope, Principal: in.Principal}, "SecretAcl",
 			"scope="+in.Scope, "principal="+in.Principal)
 	}
@@ -343,7 +381,7 @@ func (h *SecretAclHandler) Set(ctx context.Context, desired SecretAclState) (Sec
 		return desired, err
 	}
 
-	dsc.Logger.Infof(MsgPut, "SecretAcl", "scope="+desired.Scope+" principal="+desired.Principal+" permission="+desired.Permission)
+	logInfof(MsgPut, "SecretAcl", "scope="+desired.Scope+" principal="+desired.Principal+" permission="+desired.Permission)
 	if err := w.Secrets.PutAcl(ctx, workspace.PutAcl{
 		Scope:      desired.Scope,
 		Principal:  desired.Principal,
@@ -353,6 +391,22 @@ func (h *SecretAclHandler) Set(ctx context.Context, desired SecretAclState) (Sec
 	}
 
 	return h.Get(ctx, desired)
+}
+
+// SetWhatIf predicts the state Set would produce without writing the ACL.
+func (h *SecretAclHandler) SetWhatIf(_ context.Context, desired SecretAclState) (SecretAclState, error) {
+	if err := requireFields(
+		field{"scope", desired.Scope},
+		field{"principal", desired.Principal},
+		field{"permission", desired.Permission},
+	); err != nil {
+		return desired, err
+	}
+
+	logInfof(MsgWhatIfPut, "SecretAcl", "scope="+desired.Scope+" principal="+desired.Principal+" permission="+desired.Permission)
+	projected := SecretAclState{Scope: desired.Scope, Principal: desired.Principal, Permission: desired.Permission}
+	projected.SetExist(true)
+	return projected, nil
 }
 
 func (h *SecretAclHandler) Test(ctx context.Context, desired SecretAclState) (dsc.TestResult[SecretAclState], error) {
@@ -389,7 +443,7 @@ func (h *SecretAclHandler) Delete(ctx context.Context, in SecretAclState) error 
 		return err
 	}
 
-	dsc.Logger.Debugf(MsgDelete, "SecretAcl", "scope="+in.Scope+" principal="+in.Principal)
+	logDebugf(MsgDelete, "SecretAcl", "scope="+in.Scope+" principal="+in.Principal)
 	return w.Secrets.DeleteAcl(ctx, workspace.DeleteAcl{Scope: in.Scope, Principal: in.Principal})
 }
 
@@ -399,7 +453,7 @@ func (h *SecretAclHandler) Export(ctx context.Context, _ SecretAclState) ([]Secr
 		return nil, err
 	}
 
-	dsc.Logger.Debugf(MsgListAll, "SecretAcl")
+	logDebugf(MsgListAll, "SecretAcl")
 	var allAcls []SecretAclState
 
 	scopes := w.Secrets.ListScopes(ctx)

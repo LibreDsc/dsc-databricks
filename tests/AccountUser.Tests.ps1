@@ -50,6 +50,7 @@ Describe 'Databricks AccountUser Resource' -Tag 'Databricks', 'AccountUser' -Ski
             $result.capabilities | Should -Contain 'set'
             $result.capabilities | Should -Contain 'delete'
             $result.capabilities | Should -Contain 'export'
+            $result.capabilities | Should -Contain 'whatIf'
         }
     }
 
@@ -168,6 +169,27 @@ Describe 'Databricks AccountUser Resource' -Tag 'Databricks', 'AccountUser' -Ski
             $u = $result.resources | Where-Object { $_.properties.user_name -eq $script:testUserName }
             $u | Should -Not -BeNullOrEmpty
             $u.properties._exist | Should -Be $true
+        }
+    }
+
+    Context 'WhatIf Operation' -Tag 'WhatIf' -Skip:(!$script:accountAvailable) {
+        It 'should predict account user creation without creating anything' {
+            $script:whatIfUserName = New-TestAccountUserName
+            $result = Invoke-DscWhatIf -ResourceType 'LibreDsc.Databricks/AccountUser' -Properties @{
+                user_name    = $script:whatIfUserName
+                display_name = 'WhatIf Prediction'
+                active       = $true
+            }
+            $LASTEXITCODE | Should -Be 0
+            $result.metadata.'Microsoft.DSC'.executionType | Should -Be 'whatIf'
+            $result.results[0].result.afterState._exist | Should -Be $true
+            $result.results[0].result.afterState.user_name | Should -Be $script:whatIfUserName
+        }
+
+        It 'should not have created the account user' {
+            $inputJson = @{ user_name = $script:whatIfUserName } | ConvertTo-Json -Compress
+            $get = dsc resource get -r LibreDsc.Databricks/AccountUser --input $inputJson | ConvertFrom-Json
+            $get.actualState._exist | Should -Be $false
         }
     }
 

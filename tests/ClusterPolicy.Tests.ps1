@@ -51,6 +51,7 @@ Describe 'Databricks ClusterPolicy Resource' -Tag 'Databricks', 'ClusterPolicy' 
             $result.capabilities | Should -Contain 'set'
             $result.capabilities | Should -Contain 'delete'
             $result.capabilities | Should -Contain 'export'
+            $result.capabilities | Should -Contain 'whatIf'
         }
     }
 
@@ -142,6 +143,29 @@ Describe 'Databricks ClusterPolicy Resource' -Tag 'Databricks', 'ClusterPolicy' 
             $result = dsc resource export -r LibreDsc.Databricks/ClusterPolicy | ConvertFrom-Json
             $defaultPolicies = $result.resources | Where-Object { $_.properties.name -eq 'Personal Compute' -or $_.properties.name -eq 'Shared Compute' }
             $defaultPolicies | Should -BeNullOrEmpty
+        }
+    }
+
+    Context 'WhatIf Operation' -Tag 'WhatIf' {
+        It 'should predict a description change without applying it' {
+            $current = dsc resource get -r LibreDsc.Databricks/ClusterPolicy --input (@{ policy_id = $script:testPolicyId } | ConvertTo-Json -Compress) | ConvertFrom-Json
+            $script:whatIfCurrentDescription = $current.actualState.description
+
+            $result = Invoke-DscWhatIf -ResourceType 'LibreDsc.Databricks/ClusterPolicy' -Properties @{
+                policy_id   = $script:testPolicyId
+                description = 'whatif predicted description'
+            }
+            $LASTEXITCODE | Should -Be 0
+            $result.metadata.'Microsoft.DSC'.executionType | Should -Be 'whatIf'
+            $result.results[0].result.afterState._exist | Should -Be $true
+            $result.results[0].result.afterState.description | Should -Be 'whatif predicted description'
+            $result.results[0].result.afterState.policy_id | Should -Be $script:testPolicyId
+        }
+
+        It 'should not have changed the real description' {
+            $inputJson = @{ policy_id = $script:testPolicyId } | ConvertTo-Json -Compress
+            $get = dsc resource get -r LibreDsc.Databricks/ClusterPolicy --input $inputJson | ConvertFrom-Json
+            $get.actualState.description | Should -Be $script:whatIfCurrentDescription
         }
     }
 

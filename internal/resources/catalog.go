@@ -75,10 +75,10 @@ func (h *CatalogHandler) Get(ctx context.Context, in CatalogState) (CatalogState
 		return in, err
 	}
 
-	dsc.Logger.Debugf(MsgLookup, "Catalog", "name="+in.Name)
+	logDebugf(MsgLookup, "Catalog", "name="+in.Name)
 	c, err := w.Catalogs.GetByName(ctx, in.Name)
 	if err != nil {
-		dsc.Logger.Infof(MsgNotFound, "Catalog", "name="+in.Name)
+		logInfof(MsgNotFound, "Catalog", "name="+in.Name)
 		return dsc.NotFound(CatalogState{Name: in.Name}, "Catalog", "name="+in.Name)
 	}
 
@@ -101,7 +101,7 @@ func (h *CatalogHandler) Set(ctx context.Context, desired CatalogState) (Catalog
 	}
 
 	if current.ShouldExist() {
-		dsc.Logger.Infof(MsgUpdate, "Catalog", "name="+desired.Name)
+		logInfof(MsgUpdate, "Catalog", "name="+desired.Name)
 		updated, err := w.Catalogs.Update(ctx, catalog.UpdateCatalog{
 			Name:                         desired.Name,
 			Comment:                      desired.Comment,
@@ -117,7 +117,7 @@ func (h *CatalogHandler) Set(ctx context.Context, desired CatalogState) (Catalog
 		return catalogInfoToState(updated), nil
 	}
 
-	dsc.Logger.Infof(MsgCreate, "Catalog", "name="+desired.Name)
+	logInfof(MsgCreate, "Catalog", "name="+desired.Name)
 	created, err := w.Catalogs.Create(ctx, catalog.CreateCatalog{
 		Name:           desired.Name,
 		Comment:        desired.Comment,
@@ -132,6 +132,71 @@ func (h *CatalogHandler) Set(ctx context.Context, desired CatalogState) (Catalog
 		return desired, fmt.Errorf("failed to create catalog: %w", err)
 	}
 	return catalogInfoToState(created), nil
+}
+
+// projectCatalogCreate returns the state Set's create path would produce.
+// Owner, catalog_type, metastore_id, and storage_location are computed by the
+// server and stay empty.
+func projectCatalogCreate(desired *CatalogState) CatalogState {
+	projected := CatalogState{
+		Name:           desired.Name,
+		Comment:        desired.Comment,
+		StorageRoot:    desired.StorageRoot,
+		ConnectionName: desired.ConnectionName,
+		ProviderName:   desired.ProviderName,
+		ShareName:      desired.ShareName,
+		Properties:     desired.Properties,
+		Options:        desired.Options,
+	}
+	projected.SetExist(true)
+	return projected
+}
+
+// projectCatalogUpdate mirrors catalog.UpdateCatalog: the SDK omits empty
+// values, so non-empty desired fields win; immutable and computed fields
+// carry over from the current state.
+func projectCatalogUpdate(desired, current *CatalogState) CatalogState {
+	projected := *current
+	if desired.Comment != "" {
+		projected.Comment = desired.Comment
+	}
+	if desired.Owner != "" {
+		projected.Owner = desired.Owner
+	}
+	if desired.IsolationMode != "" {
+		projected.IsolationMode = desired.IsolationMode
+	}
+	if desired.EnablePredictiveOptimization != "" {
+		projected.EnablePredictiveOptimization = desired.EnablePredictiveOptimization
+	}
+	if len(desired.Properties) > 0 {
+		projected.Properties = desired.Properties
+	}
+	if len(desired.Options) > 0 {
+		projected.Options = desired.Options
+	}
+	projected.SetExist(true)
+	return projected
+}
+
+// SetWhatIf predicts the state Set would produce without touching the catalog.
+func (h *CatalogHandler) SetWhatIf(ctx context.Context, desired CatalogState) (CatalogState, error) {
+	if err := requireFields(field{"name", desired.Name}); err != nil {
+		return desired, err
+	}
+
+	current, err := h.Get(ctx, desired)
+	if err != nil {
+		return desired, err
+	}
+
+	if current.ShouldExist() {
+		logInfof(MsgWhatIfUpdate, "Catalog", "name="+desired.Name)
+		return projectCatalogUpdate(&desired, &current), nil
+	}
+
+	logInfof(MsgWhatIfCreate, "Catalog", "name="+desired.Name)
+	return projectCatalogCreate(&desired), nil
 }
 
 func (h *CatalogHandler) Test(ctx context.Context, desired CatalogState) (dsc.TestResult[CatalogState], error) {
@@ -168,7 +233,7 @@ func (h *CatalogHandler) Delete(ctx context.Context, in CatalogState) error {
 		return err
 	}
 
-	dsc.Logger.Debugf(MsgDelete, "Catalog", "name="+in.Name)
+	logDebugf(MsgDelete, "Catalog", "name="+in.Name)
 	return w.Catalogs.Delete(ctx, catalog.DeleteCatalogRequest{
 		Name:  in.Name,
 		Force: true,
@@ -181,7 +246,7 @@ func (h *CatalogHandler) Export(ctx context.Context, _ CatalogState) ([]CatalogS
 		return nil, err
 	}
 
-	dsc.Logger.Debugf(MsgListAll, "Catalog")
+	logDebugf(MsgListAll, "Catalog")
 	catalogs, err := w.Catalogs.ListAll(ctx, catalog.ListCatalogsRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list catalogs: %w", err)
