@@ -26,6 +26,19 @@ Describe 'Databricks Cluster Resource' -Tag 'Databricks', 'Cluster' -Skip:(!$scr
         # DATABRICKS_SPARK_VERSION  – e.g. 15.4.x-scala2.12
         $script:nodeTypeId    = if ($env:DATABRICKS_NODE_TYPE_ID)   { $env:DATABRICKS_NODE_TYPE_ID }   else { 'Standard_D4ds_v5' }
         $script:sparkVersion  = if ($env:DATABRICKS_SPARK_VERSION)  { $env:DATABRICKS_SPARK_VERSION }  else { '15.4.x-scala2.12' }
+
+        # Proper single-node cluster configuration. A 0-worker cluster without
+        # the singleNode profile still resolves a worker environment it never
+        # uses, which can terminate the cluster with 'WorkerEnv not found in
+        # central' on freshly provisioned workspaces.
+        $script:singleNodeSparkConf = @{
+            'spark.databricks.cluster.profile' = 'singleNode'
+            'spark.master'                     = 'local[*]'
+        }
+        $script:singleNodeTags = @{
+            dsc_test      = 'true'
+            ResourceClass = 'SingleNode'
+        }
     }
 
     AfterAll {
@@ -114,11 +127,24 @@ Describe 'Databricks Cluster Resource' -Tag 'Databricks', 'Cluster' -Skip:(!$scr
                 node_type_id            = $script:nodeTypeId
                 num_workers             = 0
                 autotermination_minutes = 10
-                custom_tags             = @{ dsc_test = 'true' }
+                spark_conf              = $script:singleNodeSparkConf
+                custom_tags             = $script:singleNodeTags
             } | ConvertTo-Json -Compress
 
-            $result = dsc resource set -r LibreDsc.Databricks/Cluster --input $inputJson | ConvertFrom-Json
-            $LASTEXITCODE | Should -Be 0
+            # Cluster provisioning on a fresh workspace can fail transiently;
+            # retry after removing the terminated carcass (a plain retry would
+            # otherwise find the existing cluster and take the edit path).
+            for ($attempt = 1; $attempt -le 3; $attempt++) {
+                $result = dsc resource set -r LibreDsc.Databricks/Cluster --input $inputJson | ConvertFrom-Json
+                $setExitCode = $LASTEXITCODE
+                if ($setExitCode -eq 0) { break }
+
+                Write-Warning "Cluster create attempt $attempt failed with exit code $setExitCode; cleaning up and retrying."
+                $cleanupJson = @{ cluster_name = $script:testClusterName } | ConvertTo-Json -Compress
+                dsc resource delete -r LibreDsc.Databricks/Cluster --input $cleanupJson 2>$null | Out-Null
+                Start-Sleep -Seconds 30
+            }
+            $setExitCode | Should -Be 0
             $result.afterState._exist | Should -Be $true
             $result.afterState.cluster_name | Should -Be $script:testClusterName
             $result.afterState.cluster_id | Should -Not -BeNullOrEmpty
@@ -152,7 +178,8 @@ Describe 'Databricks Cluster Resource' -Tag 'Databricks', 'Cluster' -Skip:(!$scr
                 node_type_id            = $script:nodeTypeId
                 num_workers             = 0
                 autotermination_minutes = 20
-                custom_tags             = @{ dsc_test = 'true' }
+                spark_conf              = $script:singleNodeSparkConf
+                custom_tags             = $script:singleNodeTags
             } | ConvertTo-Json -Compress
 
             $result = dsc resource set -r LibreDsc.Databricks/Cluster --input $inputJson | ConvertFrom-Json
@@ -212,7 +239,8 @@ Describe 'Databricks Cluster Resource' -Tag 'Databricks', 'Cluster' -Skip:(!$scr
                 node_type_id            = $script:nodeTypeId
                 num_workers             = 0
                 autotermination_minutes = 30
-                custom_tags             = @{ dsc_test = 'true' }
+                spark_conf              = $script:singleNodeSparkConf
+                custom_tags             = $script:singleNodeTags
             } | ConvertTo-Json -Compress
 
             $result = dsc resource set -r LibreDsc.Databricks/Cluster --input $inputJson | ConvertFrom-Json

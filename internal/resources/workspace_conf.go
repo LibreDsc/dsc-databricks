@@ -12,7 +12,7 @@ import (
 // WorkspaceConfState represents the state of a single workspace conf key.
 type WorkspaceConfState struct {
 	dsc.ExistProperty
-	Key string `json:"key" description:"Configuration key name. Common keys include: enableTokensConfig (enable/disable personal access tokens), maxTokenLifetimeDays (maximum PAT lifetime in days), enableIpAccessLists (enable IP access lists), enableDeprecatedClusterNamedInitScripts, enableDeprecatedGlobalInitScripts, enableDbfsFileBrowser (DBFS file browser in UI), enableWebTerminal (web terminal on clusters), enableWorkspaceFilesystem (workspace filesystem)."`
+	Key   string `json:"key" description:"Configuration key name. Common keys include: enableTokensConfig (enable/disable personal access tokens), maxTokenLifetimeDays (maximum PAT lifetime in days), enableIpAccessLists (enable IP access lists), enableDeprecatedClusterNamedInitScripts, enableDeprecatedGlobalInitScripts, enableDbfsFileBrowser (DBFS file browser in UI), enableWebTerminal (web terminal on clusters), enableWorkspaceFilesystem (workspace filesystem)."`
 	Value string `json:"value,omitempty" description:"The configuration value. Boolean keys accept 'true' or 'false'. Integer keys like maxTokenLifetimeDays accept numeric strings."`
 }
 

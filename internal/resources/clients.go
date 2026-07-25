@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/databricks/databricks-sdk-go"
 	dsc "github.com/LibreDsc/dsc-go-rdk"
+	"github.com/databricks/databricks-sdk-go"
 )
 
 // workspaceClient creates a new Databricks workspace client. Authentication is
