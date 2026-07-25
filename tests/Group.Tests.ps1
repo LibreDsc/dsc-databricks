@@ -94,7 +94,7 @@ Describe 'Databricks Group Resource' -Tag 'Databricks', 'Group' -Skip:(!$script:
             $LASTEXITCODE | Should -Be 0
             $result.afterState._exist | Should -Be $true
             $result.afterState.display_name | Should -Be $script:testGroupName
-            $result.changedProperties | Should -Contain '_exist'
+            $result.changedProperties | Should -Contain 'display_name'
             $script:testGroupId = $result.afterState.id
         }
 

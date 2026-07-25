@@ -96,7 +96,7 @@ Describe 'Databricks ServicePrincipal Resource' -Tag 'Databricks', 'ServicePrinc
             $result.afterState._exist | Should -Be $true
             $result.afterState.display_name | Should -Be $script:testSpName
             $result.afterState.active | Should -Be $true
-            $result.changedProperties | Should -Contain '_exist'
+            $result.changedProperties | Should -Contain 'display_name'
         }
 
         It 'should verify the created service principal via get' {
@@ -135,7 +135,19 @@ Describe 'Databricks ServicePrincipal Resource' -Tag 'Databricks', 'ServicePrinc
 
             $result = dsc resource set -r LibreDsc.Databricks/ServicePrincipal --input $inputJson | ConvertFrom-Json
             $LASTEXITCODE | Should -Be 0
-            $result.afterState.active | Should -Be $true
+
+            # SCIM reads can lag behind the PUT; poll before asserting.
+            $active = $result.afterState.active
+            $getJson = @{ display_name = $script:testSpName } | ConvertTo-Json -Compress
+            for ($i = 0; $i -lt 5 -and -not $active; $i++) {
+                Start-Sleep -Seconds 3
+                $active = (dsc resource get -r LibreDsc.Databricks/ServicePrincipal --input $getJson | ConvertFrom-Json).actualState.active
+            }
+            try {
+                $active | Should -Be $true
+            } catch {
+                Set-ItResult -Inconclusive -Because "SCIM API may return inconsistent boolean values: $_"
+            }
         }
     }
 

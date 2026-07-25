@@ -1,261 +1,141 @@
 package resources
 
 import (
-	"encoding/json"
-	"reflect"
+	"context"
 
-	"github.com/LibreDsc/dsc-databricks/internal/dsc"
+	dsc "github.com/LibreDsc/dsc-go-rdk"
 	"github.com/databricks/databricks-sdk-go/service/workspace"
 )
 
-func init() {
-	dsc.RegisterResourceWithMetadata("LibreDsc.Databricks/Secret", &SecretHandler{}, secretMetadata())
-	dsc.RegisterResourceWithMetadata("LibreDsc.Databricks/SecretScope", &SecretScopeHandler{}, secretScopeMetadata())
-	dsc.RegisterResourceWithMetadata("LibreDsc.Databricks/SecretAcl", &SecretAclHandler{}, secretAclMetadata())
-}
-
-// Secret property descriptions from SDK documentation.
-var secretPropertyDescriptions = dsc.PropertyDescriptions{
-	"key":          "A unique name to identify the secret.",
-	"scope":        "The name of the scope to which the secret will be associated with.",
-	"string_value": "If specified, note that the value will be stored in UTF-8 (MB4) form.",
-	"bytes_value":  "If specified, value will be stored as bytes.",
-}
-
-var secretScopePropertyDescriptions = dsc.PropertyDescriptions{
-	"scope":                    "A unique name to identify the scope.",
-	"initial_manage_principal": "The principal that is initially granted MANAGE permission to the created scope.",
-	"scope_backend_type":       "The backend type the scope will be created with (DATABRICKS or AZURE_KEYVAULT).",
-	"backend_azure_keyvault":   "The metadata for the Azure KeyVault if using Azure-backed secret scope.",
-}
-
-var secretAclPropertyDescriptions = dsc.PropertyDescriptions{
-	"scope":      "The name of the scope to apply permissions to.",
-	"principal":  "The principal (user or group) to apply permissions to.",
-	"permission": "The permission level applied to the principal (READ, WRITE, or MANAGE).",
-}
-
-func secretMetadata() dsc.ResourceMetadata {
-	return dsc.BuildMetadata(dsc.MetadataConfig{
-		ResourceType:      "LibreDsc.Databricks/Secret",
-		Description:       "Manage Databricks secrets",
-		SchemaDescription: "Schema for managing Databricks secrets.",
-		ResourceName:      "secret",
-		Tags:              []string{"databricks", "secret", "workspace"},
-		Descriptions:      secretPropertyDescriptions,
-		SchemaType:        reflect.TypeFor[workspace.PutSecret](),
-		// Secret only exposes scope, key, and _exist. Value equality is
-		// sufficient — the Databricks API never returns the secret value,
-		// so a custom test method adds no benefit over the synthetic one.
-		OmitTest: true,
-	})
-}
-
-// SecretScopeSchemaInput is used for JSON schema generation only.
-// Unlike workspace.CreateScope which uses scope_backend_type, we expose
-// backend_type to match the state output and keep the schema consistent.
-type SecretScopeSchemaInput struct {
-	Scope       string `json:"scope"`
-	BackendType string `json:"backend_type,omitempty"`
-}
-
-func secretScopeMetadata() dsc.ResourceMetadata {
-	return dsc.BuildMetadata(dsc.MetadataConfig{
-		ResourceType:      "LibreDsc.Databricks/SecretScope",
-		Description:       "Manage Databricks secret scopes",
-		SchemaDescription: "Schema for managing Databricks secret scopes.",
-		ResourceName:      "secret scope",
-		Tags:              []string{"databricks", "secret", "scope", "workspace"},
-		Descriptions:      secretScopePropertyDescriptions,
-		SchemaType:        reflect.TypeFor[SecretScopeSchemaInput](),
-	})
-}
-
-// SecretAclSchemaInput is used for JSON schema generation only.
-// Unlike workspace.PutAcl, permission is optional here because get and delete
-// operations only require scope and principal.
-type SecretAclSchemaInput struct {
-	Permission string `json:"permission,omitempty"`
-	Principal  string `json:"principal"`
-	Scope      string `json:"scope"`
-}
-
-func secretAclMetadata() dsc.ResourceMetadata {
-	return dsc.BuildMetadata(dsc.MetadataConfig{
-		ResourceType:      "LibreDsc.Databricks/SecretAcl",
-		Description:       "Manage Databricks secret ACLs",
-		SchemaDescription: "Schema for managing Databricks secret ACLs.",
-		ResourceName:      "secret ACL",
-		Tags:              []string{"databricks", "secret", "acl", "permissions", "workspace"},
-		Descriptions:      secretAclPropertyDescriptions,
-		SchemaType:        reflect.TypeFor[SecretAclSchemaInput](),
-	})
-}
-
-// SecretState represents the state of a Databricks secret.
+// SecretState represents the state of a Databricks secret. The secret value is
+// write-only: the Databricks API never returns it, so Get only reports existence.
 type SecretState struct {
-	Scope string `json:"scope"`
-	Key   string `json:"key"`
-	Exist bool   `json:"_exist"`
+	dsc.ExistProperty
+	Scope       string `json:"scope" description:"The name of the scope to which the secret will be associated with."`
+	Key         string `json:"key" description:"A unique name to identify the secret."`
+	StringValue string `json:"string_value,omitempty" description:"If specified, note that the value will be stored in UTF-8 (MB4) form."`
+	BytesValue  string `json:"bytes_value,omitempty" description:"If specified, value will be stored as bytes."`
 }
 
-// SecretHandler handles Secret resource operations.
+func secretConfig() dsc.ResourceConfig {
+	return dsc.ResourceConfig{
+		Type:        "LibreDsc.Databricks/Secret",
+		Version:     "0.1.0",
+		Description: "Manage Databricks secrets",
+		Tags:        []string{"databricks", "secret", "workspace"},
+		SetReturn:   dsc.SetReturnStateAndDiff,
+		SchemaOptions: dsc.SchemaOptions{
+			SchemaDescription:         "Schema for managing Databricks secrets.",
+			AllowAdditionalProperties: true,
+		},
+	}
+}
+
+// SecretHandler handles Secret resource operations. Value equality cannot be
+// tested — the API never returns the secret value — so no Testable is
+// implemented and the DSC engine synthesizes test from Get.
 type SecretHandler struct{}
 
-func (h *SecretHandler) Get(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.GetResult, error) {
-	req, err := dsc.UnmarshalInput[workspace.PutSecret](input)
-	if err != nil {
-		return nil, err
-	}
-	if err := dsc.ValidateRequired(
-		dsc.RequiredField{Name: "scope", Value: req.Scope},
-		dsc.RequiredField{Name: "key", Value: req.Key},
-	); err != nil {
-		return nil, err
+func (h *SecretHandler) Get(ctx context.Context, in SecretState) (SecretState, error) {
+	if err := requireFields(field{"scope", in.Scope}, field{"key", in.Key}); err != nil {
+		return in, err
 	}
 
-	cmdCtx, w, err := getWorkspaceClient(ctx)
+	w, err := workspaceClient()
 	if err != nil {
-		return nil, err
+		return in, err
 	}
 
-	dsc.Logger.Debugf(dsc.MsgLookup, "Secret", "key="+req.Key+" scope="+req.Scope)
-	secrets := w.Secrets.ListSecrets(cmdCtx, workspace.ListSecretsRequest{Scope: req.Scope})
+	dsc.Logger.Debugf(MsgLookup, "Secret", "key="+in.Key+" scope="+in.Scope)
+	secrets := w.Secrets.ListSecrets(ctx, workspace.ListSecretsRequest{Scope: in.Scope})
 	for {
-		secret, err := secrets.Next(cmdCtx)
+		secret, err := secrets.Next(ctx)
 		if err != nil {
 			break
 		}
-		if secret.Key == req.Key {
-			return &dsc.GetResult{ActualState: SecretState{Scope: req.Scope, Key: req.Key, Exist: true}}, nil
+		if secret.Key == in.Key {
+			state := SecretState{Scope: in.Scope, Key: in.Key}
+			state.SetExist(true)
+			return state, nil
 		}
 	}
-	dsc.Logger.Infof(dsc.MsgNotFound, "Secret", "key="+req.Key+" scope="+req.Scope)
-	return &dsc.GetResult{ActualState: SecretState{Scope: req.Scope, Key: req.Key, Exist: false}}, nil
+	dsc.Logger.Infof(MsgNotFound, "Secret", "key="+in.Key+" scope="+in.Scope)
+	return dsc.NotFound(SecretState{Scope: in.Scope, Key: in.Key}, "Secret", "key="+in.Key, "scope="+in.Scope)
 }
 
-func (h *SecretHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.SetResult, error) {
-	req, err := dsc.UnmarshalInput[workspace.PutSecret](input)
+func (h *SecretHandler) Set(ctx context.Context, desired SecretState) (SecretState, error) {
+	if err := requireFields(field{"scope", desired.Scope}, field{"key", desired.Key}); err != nil {
+		return desired, err
+	}
+	if err := requireAtLeastOne("string_value or bytes_value", desired.StringValue, desired.BytesValue); err != nil {
+		return desired, err
+	}
+
+	w, err := workspaceClient()
 	if err != nil {
-		return nil, err
-	}
-	if err := dsc.ValidateRequired(
-		dsc.RequiredField{Name: "scope", Value: req.Scope},
-		dsc.RequiredField{Name: "key", Value: req.Key},
-	); err != nil {
-		return nil, err
-	}
-	if err := dsc.ValidateAtLeastOne("string_value or bytes_value", req.StringValue, req.BytesValue); err != nil {
-		return nil, err
+		return desired, err
 	}
 
-	beforeState := SecretState{Scope: req.Scope, Key: req.Key, Exist: false}
-	beforeResult, _ := h.Get(ctx, input)
-	if beforeResult != nil {
-		if s, ok := beforeResult.ActualState.(SecretState); ok {
-			beforeState = s
-		}
+	dsc.Logger.Infof(MsgPut, "Secret", "key="+desired.Key+" scope="+desired.Scope)
+	if err := w.Secrets.PutSecret(ctx, workspace.PutSecret{
+		Scope:       desired.Scope,
+		Key:         desired.Key,
+		StringValue: desired.StringValue,
+		BytesValue:  desired.BytesValue,
+	}); err != nil {
+		return desired, err
 	}
 
-	cmdCtx, w, err := getWorkspaceClient(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	dsc.Logger.Infof(dsc.MsgPut, "Secret", "key="+req.Key+" scope="+req.Scope)
-	if err := w.Secrets.PutSecret(cmdCtx, req); err != nil {
-		return nil, err
-	}
-
-	afterState := SecretState{Scope: req.Scope, Key: req.Key, Exist: true}
-	changedProps := dsc.CompareStates(beforeState, afterState)
-
-	return &dsc.SetResult{
-		BeforeState:       beforeState,
-		AfterState:        afterState,
-		ChangedProperties: changedProps,
-	}, nil
+	return h.Get(ctx, desired)
 }
 
-func (h *SecretHandler) Test(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.TestResult, error) {
-	req, err := dsc.UnmarshalInput[workspace.PutSecret](input)
-	if err != nil {
-		return nil, err
-	}
-	if err := dsc.ValidateRequired(
-		dsc.RequiredField{Name: "scope", Value: req.Scope},
-		dsc.RequiredField{Name: "key", Value: req.Key},
-	); err != nil {
-		return nil, err
-	}
-
-	result, err := h.Get(ctx, input)
-	if err != nil {
-		return nil, err
-	}
-
-	actualState := result.ActualState
-	desiredState := SecretState{Scope: req.Scope, Key: req.Key, Exist: true}
-
-	differing := dsc.CompareStates(desiredState, actualState)
-	inDesiredState := len(differing) == 0
-
-	return &dsc.TestResult{
-		DesiredState:        desiredState,
-		ActualState:         actualState,
-		InDesiredState:      inDesiredState,
-		DifferingProperties: differing,
-	}, nil
-}
-
-func (h *SecretHandler) Delete(ctx dsc.ResourceContext, input json.RawMessage) error {
-	req, err := dsc.UnmarshalInput[workspace.DeleteSecret](input)
-	if err != nil {
-		return err
-	}
-	if err := dsc.ValidateRequired(
-		dsc.RequiredField{Name: "scope", Value: req.Scope},
-		dsc.RequiredField{Name: "key", Value: req.Key},
-	); err != nil {
+func (h *SecretHandler) Delete(ctx context.Context, in SecretState) error {
+	if err := requireFields(field{"scope", in.Scope}, field{"key", in.Key}); err != nil {
 		return err
 	}
 
-	cmdCtx, w, err := getWorkspaceClient(ctx)
+	current, err := h.Get(ctx, in)
+	if err != nil {
+		return err
+	}
+	if !current.ShouldExist() {
+		return nil
+	}
+
+	w, err := workspaceClient()
 	if err != nil {
 		return err
 	}
 
-	dsc.Logger.Debugf(dsc.MsgDelete, "Secret", "key="+req.Key+" scope="+req.Scope)
-	return w.Secrets.DeleteSecret(cmdCtx, req)
+	dsc.Logger.Debugf(MsgDelete, "Secret", "key="+in.Key+" scope="+in.Scope)
+	return w.Secrets.DeleteSecret(ctx, workspace.DeleteSecret{Scope: in.Scope, Key: in.Key})
 }
 
-func (h *SecretHandler) Export(ctx dsc.ResourceContext) ([]any, error) {
-	cmdCtx, w, err := getWorkspaceClient(ctx)
+func (h *SecretHandler) Export(ctx context.Context, _ SecretState) ([]SecretState, error) {
+	w, err := workspaceClient()
 	if err != nil {
 		return nil, err
 	}
 
-	dsc.Logger.Debugf(dsc.MsgListAll, "Secret")
-	var allSecrets []any
+	dsc.Logger.Debugf(MsgListAll, "Secret")
+	var allSecrets []SecretState
 
-	scopes := w.Secrets.ListScopes(cmdCtx)
+	scopes := w.Secrets.ListScopes(ctx)
 	for {
-		scope, err := scopes.Next(cmdCtx)
+		scope, err := scopes.Next(ctx)
 		if err != nil {
 			break
 		}
 
-		secrets := w.Secrets.ListSecrets(cmdCtx, workspace.ListSecretsRequest{Scope: scope.Name})
+		secrets := w.Secrets.ListSecrets(ctx, workspace.ListSecretsRequest{Scope: scope.Name})
 		for {
-			secret, err := secrets.Next(cmdCtx)
+			secret, err := secrets.Next(ctx)
 			if err != nil {
 				break
 			}
-			allSecrets = append(allSecrets, SecretState{
-				Scope: scope.Name,
-				Key:   secret.Key,
-				Exist: true,
-			})
+			state := SecretState{Scope: scope.Name, Key: secret.Key}
+			state.SetExist(true)
+			allSecrets = append(allSecrets, state)
 		}
 	}
 
@@ -264,337 +144,280 @@ func (h *SecretHandler) Export(ctx dsc.ResourceContext) ([]any, error) {
 
 // SecretScopeState represents the state of a Databricks secret scope.
 type SecretScopeState struct {
-	Scope       string `json:"scope"`
-	BackendType string `json:"backend_type"`
-	Exist       bool   `json:"_exist"`
+	dsc.ExistProperty
+	Scope       string `json:"scope" description:"A unique name to identify the scope."`
+	BackendType string `json:"backend_type,omitempty" description:"The backend type the scope was created with (read-only)."`
+}
+
+func secretScopeConfig() dsc.ResourceConfig {
+	return dsc.ResourceConfig{
+		Type:        "LibreDsc.Databricks/SecretScope",
+		Version:     "0.1.0",
+		Description: "Manage Databricks secret scopes",
+		Tags:        []string{"databricks", "secret", "scope", "workspace"},
+		SetReturn:   dsc.SetReturnStateAndDiff,
+		SchemaOptions: dsc.SchemaOptions{
+			SchemaDescription:         "Schema for managing Databricks secret scopes.",
+			AllowAdditionalProperties: true,
+		},
+	}
 }
 
 // SecretScopeHandler handles SecretScope resource operations.
 type SecretScopeHandler struct{}
 
-func (h *SecretScopeHandler) Get(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.GetResult, error) {
-	req, err := dsc.UnmarshalInput[workspace.CreateScope](input)
-	if err != nil {
-		return nil, err
-	}
-	if err := dsc.ValidateRequired(dsc.RequiredField{Name: "scope", Value: req.Scope}); err != nil {
-		return nil, err
+func (h *SecretScopeHandler) Get(ctx context.Context, in SecretScopeState) (SecretScopeState, error) {
+	if err := requireFields(field{"scope", in.Scope}); err != nil {
+		return in, err
 	}
 
-	cmdCtx, w, err := getWorkspaceClient(ctx)
+	w, err := workspaceClient()
 	if err != nil {
-		return nil, err
+		return in, err
 	}
 
-	dsc.Logger.Debugf(dsc.MsgLookup, "SecretScope", "scope="+req.Scope)
-	scopes := w.Secrets.ListScopes(cmdCtx)
+	dsc.Logger.Debugf(MsgLookup, "SecretScope", "scope="+in.Scope)
+	scopes := w.Secrets.ListScopes(ctx)
 	for {
-		scope, err := scopes.Next(cmdCtx)
+		scope, err := scopes.Next(ctx)
 		if err != nil {
 			break
 		}
-		if scope.Name == req.Scope {
-			return &dsc.GetResult{ActualState: SecretScopeState{
-				Scope:       scope.Name,
-				BackendType: scope.BackendType.String(),
-				Exist:       true,
-			}}, nil
+		if scope.Name == in.Scope {
+			state := SecretScopeState{Scope: scope.Name, BackendType: scope.BackendType.String()}
+			state.SetExist(true)
+			return state, nil
 		}
 	}
-	return &dsc.GetResult{ActualState: SecretScopeState{Scope: req.Scope, Exist: false}}, nil
+	dsc.Logger.Infof(MsgNotFound, "SecretScope", "scope="+in.Scope)
+	return dsc.NotFound(SecretScopeState{Scope: in.Scope}, "SecretScope", "scope="+in.Scope)
 }
 
-func (h *SecretScopeHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.SetResult, error) {
-	req, err := dsc.UnmarshalInput[workspace.CreateScope](input)
-	if err != nil {
-		return nil, err
-	}
-	if err := dsc.ValidateRequired(dsc.RequiredField{Name: "scope", Value: req.Scope}); err != nil {
-		return nil, err
+func (h *SecretScopeHandler) Set(ctx context.Context, desired SecretScopeState) (SecretScopeState, error) {
+	if err := requireFields(field{"scope", desired.Scope}); err != nil {
+		return desired, err
 	}
 
-	beforeResult, _ := h.Get(ctx, input)
-	var beforeState SecretScopeState
-	if beforeResult != nil {
-		if s, ok := beforeResult.ActualState.(SecretScopeState); ok {
-			beforeState = s
+	current, err := h.Get(ctx, desired)
+	if err != nil {
+		return desired, err
+	}
+
+	if !current.ShouldExist() {
+		w, err := workspaceClient()
+		if err != nil {
+			return desired, err
 		}
-	}
-
-	cmdCtx, w, err := getWorkspaceClient(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if !beforeState.Exist {
-		dsc.Logger.Infof(dsc.MsgCreate, "SecretScope", "scope="+req.Scope)
-		if err := w.Secrets.CreateScope(cmdCtx, req); err != nil {
-			return nil, err
+		dsc.Logger.Infof(MsgCreate, "SecretScope", "scope="+desired.Scope)
+		if err := w.Secrets.CreateScope(ctx, workspace.CreateScope{Scope: desired.Scope}); err != nil {
+			return desired, err
 		}
 	} else {
-		dsc.Logger.Debugf(dsc.MsgAlreadyExists, "SecretScope", "scope="+req.Scope)
+		dsc.Logger.Debugf(MsgAlreadyExists, "SecretScope", "scope="+desired.Scope)
 	}
 
-	afterResult, _ := h.Get(ctx, input)
-	var afterState SecretScopeState
-	if afterResult != nil {
-		if s, ok := afterResult.ActualState.(SecretScopeState); ok {
-			afterState = s
-		}
-	}
-
-	changedProps := dsc.CompareStates(beforeState, afterState)
-
-	return &dsc.SetResult{
-		BeforeState:       beforeState,
-		AfterState:        afterState,
-		ChangedProperties: changedProps,
-	}, nil
+	return h.Get(ctx, desired)
 }
 
-func (h *SecretScopeHandler) Test(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.TestResult, error) {
-	req, err := dsc.UnmarshalInput[SecretScopeState](input)
+func (h *SecretScopeHandler) Test(ctx context.Context, desired SecretScopeState) (dsc.TestResult[SecretScopeState], error) {
+	actual, err := h.Get(ctx, desired)
 	if err != nil {
-		return nil, err
+		return dsc.TestResult[SecretScopeState]{}, err
 	}
 
-	result, err := h.Get(ctx, input)
-	if err != nil {
-		return nil, err
+	result := dsc.TestResult[SecretScopeState]{ActualState: actual}
+	if !actual.ShouldExist() {
+		// CompareStates skips canonical properties; report existence drift explicitly.
+		result.DifferingProperties = []string{"_exist"}
+		return result, nil
 	}
-
-	actualState := result.ActualState
-	desiredState := SecretScopeState{Scope: req.Scope, BackendType: req.BackendType, Exist: true}
-
-	differing := dsc.CompareStates(desiredState, actualState)
-	inDesiredState := len(differing) == 0
-
-	return &dsc.TestResult{
-		DesiredState:        desiredState,
-		ActualState:         actualState,
-		InDesiredState:      inDesiredState,
-		DifferingProperties: differing,
-	}, nil
+	result.DifferingProperties = dsc.CompareStates(desired, actual)
+	return result, nil
 }
 
-func (h *SecretScopeHandler) Delete(ctx dsc.ResourceContext, input json.RawMessage) error {
-	req, err := dsc.UnmarshalInput[workspace.DeleteScope](input)
-	if err != nil {
-		return err
-	}
-	if err := dsc.ValidateRequired(dsc.RequiredField{Name: "scope", Value: req.Scope}); err != nil {
+func (h *SecretScopeHandler) Delete(ctx context.Context, in SecretScopeState) error {
+	if err := requireFields(field{"scope", in.Scope}); err != nil {
 		return err
 	}
 
-	cmdCtx, w, err := getWorkspaceClient(ctx)
+	current, err := h.Get(ctx, in)
+	if err != nil {
+		return err
+	}
+	if !current.ShouldExist() {
+		return nil
+	}
+
+	w, err := workspaceClient()
 	if err != nil {
 		return err
 	}
 
-	dsc.Logger.Debugf(dsc.MsgDelete, "SecretScope", "scope="+req.Scope)
-	return w.Secrets.DeleteScope(cmdCtx, req)
+	dsc.Logger.Debugf(MsgDelete, "SecretScope", "scope="+in.Scope)
+	return w.Secrets.DeleteScope(ctx, workspace.DeleteScope{Scope: in.Scope})
 }
 
-func (h *SecretScopeHandler) Export(ctx dsc.ResourceContext) ([]any, error) {
-	cmdCtx, w, err := getWorkspaceClient(ctx)
+func (h *SecretScopeHandler) Export(ctx context.Context, _ SecretScopeState) ([]SecretScopeState, error) {
+	w, err := workspaceClient()
 	if err != nil {
 		return nil, err
 	}
 
-	dsc.Logger.Debugf(dsc.MsgListAll, "SecretScope")
-	var allScopes []any
+	dsc.Logger.Debugf(MsgListAll, "SecretScope")
+	var allScopes []SecretScopeState
 
-	scopes := w.Secrets.ListScopes(cmdCtx)
+	scopes := w.Secrets.ListScopes(ctx)
 	for {
-		scope, err := scopes.Next(cmdCtx)
+		scope, err := scopes.Next(ctx)
 		if err != nil {
 			break
 		}
-		allScopes = append(allScopes, SecretScopeState{
-			Scope:       scope.Name,
-			BackendType: scope.BackendType.String(),
-			Exist:       true,
-		})
+		state := SecretScopeState{Scope: scope.Name, BackendType: scope.BackendType.String()}
+		state.SetExist(true)
+		allScopes = append(allScopes, state)
 	}
 
 	return allScopes, nil
 }
 
-// SecretAclState represents the state of a Databricks secret ACL.
+// SecretAclState represents the state of a Databricks secret ACL. Permission is
+// optional because get and delete operations only require scope and principal.
 type SecretAclState struct {
-	Scope      string `json:"scope"`
-	Principal  string `json:"principal"`
-	Permission string `json:"permission"`
-	Exist      bool   `json:"_exist"`
+	dsc.ExistProperty
+	Scope      string `json:"scope" description:"The name of the scope to apply permissions to."`
+	Principal  string `json:"principal" description:"The principal (user or group) to apply permissions to."`
+	Permission string `json:"permission,omitempty" description:"The permission level applied to the principal (READ, WRITE, or MANAGE)." enum:"READ,WRITE,MANAGE"`
+}
+
+func secretAclConfig() dsc.ResourceConfig {
+	return dsc.ResourceConfig{
+		Type:        "LibreDsc.Databricks/SecretAcl",
+		Version:     "0.1.0",
+		Description: "Manage Databricks secret ACLs",
+		Tags:        []string{"databricks", "secret", "acl", "permissions", "workspace"},
+		SetReturn:   dsc.SetReturnStateAndDiff,
+		SchemaOptions: dsc.SchemaOptions{
+			SchemaDescription:         "Schema for managing Databricks secret ACLs.",
+			AllowAdditionalProperties: true,
+		},
+	}
 }
 
 // SecretAclHandler handles SecretAcl resource operations.
 type SecretAclHandler struct{}
 
-func (h *SecretAclHandler) Get(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.GetResult, error) {
-	req, err := dsc.UnmarshalInput[workspace.PutAcl](input)
-	if err != nil {
-		return nil, err
-	}
-	if err := dsc.ValidateRequired(
-		dsc.RequiredField{Name: "scope", Value: req.Scope},
-		dsc.RequiredField{Name: "principal", Value: req.Principal},
-	); err != nil {
-		return nil, err
+func (h *SecretAclHandler) Get(ctx context.Context, in SecretAclState) (SecretAclState, error) {
+	if err := requireFields(field{"scope", in.Scope}, field{"principal", in.Principal}); err != nil {
+		return in, err
 	}
 
-	cmdCtx, w, err := getWorkspaceClient(ctx)
+	w, err := workspaceClient()
 	if err != nil {
-		return nil, err
+		return in, err
 	}
 
-	dsc.Logger.Debugf(dsc.MsgLookup, "SecretAcl", "scope="+req.Scope+" principal="+req.Principal)
-	acl, err := w.Secrets.GetAcl(cmdCtx, workspace.GetAclRequest{Scope: req.Scope, Principal: req.Principal})
+	dsc.Logger.Debugf(MsgLookup, "SecretAcl", "scope="+in.Scope+" principal="+in.Principal)
+	acl, err := w.Secrets.GetAcl(ctx, workspace.GetAclRequest{Scope: in.Scope, Principal: in.Principal})
 	if err != nil {
-		return &dsc.GetResult{ActualState: SecretAclState{
-			Scope:     req.Scope,
-			Principal: req.Principal,
-			Exist:     false,
-		}}, nil
+		dsc.Logger.Infof(MsgNotFound, "SecretAcl", "scope="+in.Scope+" principal="+in.Principal)
+		return dsc.NotFound(SecretAclState{Scope: in.Scope, Principal: in.Principal}, "SecretAcl",
+			"scope="+in.Scope, "principal="+in.Principal)
 	}
 
-	return &dsc.GetResult{ActualState: SecretAclState{
-		Scope:      req.Scope,
-		Principal:  acl.Principal,
-		Permission: acl.Permission.String(),
-		Exist:      true,
-	}}, nil
+	state := SecretAclState{Scope: in.Scope, Principal: acl.Principal, Permission: acl.Permission.String()}
+	state.SetExist(true)
+	return state, nil
 }
 
-func (h *SecretAclHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.SetResult, error) {
-	req, err := dsc.UnmarshalInput[workspace.PutAcl](input)
-	if err != nil {
-		return nil, err
-	}
-	if err := dsc.ValidateRequired(
-		dsc.RequiredField{Name: "scope", Value: req.Scope},
-		dsc.RequiredField{Name: "principal", Value: req.Principal},
-		dsc.RequiredField{Name: "permission", Value: string(req.Permission)},
+func (h *SecretAclHandler) Set(ctx context.Context, desired SecretAclState) (SecretAclState, error) {
+	if err := requireFields(
+		field{"scope", desired.Scope},
+		field{"principal", desired.Principal},
+		field{"permission", desired.Permission},
 	); err != nil {
-		return nil, err
+		return desired, err
 	}
 
-	getInput, _ := json.Marshal(map[string]string{"scope": req.Scope, "principal": req.Principal})
-	beforeResult, _ := h.Get(ctx, getInput)
-	var beforeState SecretAclState
-	if beforeResult != nil {
-		if s, ok := beforeResult.ActualState.(SecretAclState); ok {
-			beforeState = s
-		}
-	}
-
-	cmdCtx, w, err := getWorkspaceClient(ctx)
+	w, err := workspaceClient()
 	if err != nil {
-		return nil, err
+		return desired, err
 	}
 
-	dsc.Logger.Infof(dsc.MsgPut, "SecretAcl", "scope="+req.Scope+" principal="+req.Principal+" permission="+string(req.Permission))
-	if err := w.Secrets.PutAcl(cmdCtx, req); err != nil {
-		return nil, err
+	dsc.Logger.Infof(MsgPut, "SecretAcl", "scope="+desired.Scope+" principal="+desired.Principal+" permission="+desired.Permission)
+	if err := w.Secrets.PutAcl(ctx, workspace.PutAcl{
+		Scope:      desired.Scope,
+		Principal:  desired.Principal,
+		Permission: workspace.AclPermission(desired.Permission),
+	}); err != nil {
+		return desired, err
 	}
 
-	afterResult, _ := h.Get(ctx, getInput)
-	var afterState SecretAclState
-	if afterResult != nil {
-		if s, ok := afterResult.ActualState.(SecretAclState); ok {
-			afterState = s
-		}
-	}
-
-	changedProps := dsc.CompareStates(beforeState, afterState)
-
-	return &dsc.SetResult{
-		BeforeState:       beforeState,
-		AfterState:        afterState,
-		ChangedProperties: changedProps,
-	}, nil
+	return h.Get(ctx, desired)
 }
 
-func (h *SecretAclHandler) Test(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.TestResult, error) {
-	req, err := dsc.UnmarshalInput[workspace.PutAcl](input)
+func (h *SecretAclHandler) Test(ctx context.Context, desired SecretAclState) (dsc.TestResult[SecretAclState], error) {
+	actual, err := h.Get(ctx, desired)
 	if err != nil {
-		return nil, err
+		return dsc.TestResult[SecretAclState]{}, err
 	}
 
-	getInput, _ := json.Marshal(map[string]string{"scope": req.Scope, "principal": req.Principal})
-	result, err := h.Get(ctx, getInput)
-	if err != nil {
-		return nil, err
+	result := dsc.TestResult[SecretAclState]{ActualState: actual}
+	if !actual.ShouldExist() {
+		// CompareStates skips canonical properties; report existence drift explicitly.
+		result.DifferingProperties = []string{"_exist"}
+		return result, nil
 	}
-
-	actualState := result.ActualState
-	desiredState := SecretAclState{
-		Scope:      req.Scope,
-		Principal:  req.Principal,
-		Permission: string(req.Permission),
-		Exist:      true,
-	}
-
-	differing := dsc.CompareStates(desiredState, actualState)
-	inDesiredState := len(differing) == 0
-
-	return &dsc.TestResult{
-		DesiredState:        desiredState,
-		ActualState:         actualState,
-		InDesiredState:      inDesiredState,
-		DifferingProperties: differing,
-	}, nil
+	result.DifferingProperties = dsc.CompareStates(desired, actual)
+	return result, nil
 }
 
-func (h *SecretAclHandler) Delete(ctx dsc.ResourceContext, input json.RawMessage) error {
-	req, err := dsc.UnmarshalInput[workspace.PutAcl](input)
-	if err != nil {
-		return err
-	}
-	if err := dsc.ValidateRequired(
-		dsc.RequiredField{Name: "scope", Value: req.Scope},
-		dsc.RequiredField{Name: "principal", Value: req.Principal},
-	); err != nil {
+func (h *SecretAclHandler) Delete(ctx context.Context, in SecretAclState) error {
+	if err := requireFields(field{"scope", in.Scope}, field{"principal", in.Principal}); err != nil {
 		return err
 	}
 
-	cmdCtx, w, err := getWorkspaceClient(ctx)
+	current, err := h.Get(ctx, in)
+	if err != nil {
+		return err
+	}
+	if !current.ShouldExist() {
+		return nil
+	}
+
+	w, err := workspaceClient()
 	if err != nil {
 		return err
 	}
 
-	dsc.Logger.Debugf(dsc.MsgDelete, "SecretAcl", "scope="+req.Scope+" principal="+req.Principal)
-	return w.Secrets.DeleteAcl(cmdCtx, workspace.DeleteAcl{Scope: req.Scope, Principal: req.Principal})
+	dsc.Logger.Debugf(MsgDelete, "SecretAcl", "scope="+in.Scope+" principal="+in.Principal)
+	return w.Secrets.DeleteAcl(ctx, workspace.DeleteAcl{Scope: in.Scope, Principal: in.Principal})
 }
 
-func (h *SecretAclHandler) Export(ctx dsc.ResourceContext) ([]any, error) {
-	cmdCtx, w, err := getWorkspaceClient(ctx)
+func (h *SecretAclHandler) Export(ctx context.Context, _ SecretAclState) ([]SecretAclState, error) {
+	w, err := workspaceClient()
 	if err != nil {
 		return nil, err
 	}
 
-	dsc.Logger.Debugf(dsc.MsgListAll, "SecretAcl")
-	var allAcls []any
+	dsc.Logger.Debugf(MsgListAll, "SecretAcl")
+	var allAcls []SecretAclState
 
-	scopes := w.Secrets.ListScopes(cmdCtx)
+	scopes := w.Secrets.ListScopes(ctx)
 	for {
-		scope, err := scopes.Next(cmdCtx)
+		scope, err := scopes.Next(ctx)
 		if err != nil {
 			break
 		}
 
-		acls := w.Secrets.ListAcls(cmdCtx, workspace.ListAclsRequest{Scope: scope.Name})
+		acls := w.Secrets.ListAcls(ctx, workspace.ListAclsRequest{Scope: scope.Name})
 		for {
-			acl, err := acls.Next(cmdCtx)
+			acl, err := acls.Next(ctx)
 			if err != nil {
 				break
 			}
-			allAcls = append(allAcls, SecretAclState{
-				Scope:      scope.Name,
-				Principal:  acl.Principal,
-				Permission: acl.Permission.String(),
-				Exist:      true,
-			})
+			state := SecretAclState{Scope: scope.Name, Principal: acl.Principal, Permission: acl.Permission.String()}
+			state.SetExist(true)
+			allAcls = append(allAcls, state)
 		}
 	}
 

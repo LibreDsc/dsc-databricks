@@ -1,70 +1,44 @@
 package resources
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
-	"reflect"
 
-	"github.com/LibreDsc/dsc-databricks/internal/dsc"
+	dsc "github.com/LibreDsc/dsc-go-rdk"
 	"github.com/databricks/databricks-sdk-go/service/iam"
 )
 
-func init() {
-	dsc.RegisterResourceWithMetadata("LibreDsc.Databricks/ServicePrincipal", &ServicePrincipalHandler{}, servicePrincipalMetadata())
-}
-
-// ServicePrincipal property descriptions from SDK documentation.
-var servicePrincipalPropertyDescriptions = dsc.PropertyDescriptions{
-	"id":             "Databricks service principal ID.",
-	"application_id": "UUID of the Azure app registration or identity relating to the service principal.",
-	"display_name":   "Display name of the service principal.",
-	"active":         "If this service principal is active.",
-	"external_id":    "External ID reserved for future use.",
-	"entitlements":   "Entitlements assigned to the service principal.",
-	"roles":          "Corresponds to AWS instance profile/ARN role.",
-}
-
-// ServicePrincipalSchemaInput defines the desired-state fields for the schema
-// and for unmarshaling input. id is computed on create so it carries omitempty.
-type ServicePrincipalSchemaInput struct {
-	DisplayName   string             `json:"display_name"`
-	ApplicationID string             `json:"application_id,omitempty"`
-	ExternalID    string             `json:"external_id,omitempty"`
-	ID            string             `json:"id,omitempty"`
-	Entitlements  []UserComplexValue `json:"entitlements,omitempty"`
-	Roles         []UserComplexValue `json:"roles,omitempty"`
-	Active        bool               `json:"active,omitempty"`
-}
-
-func servicePrincipalMetadata() dsc.ResourceMetadata {
-	return dsc.BuildMetadata(dsc.MetadataConfig{
-		ResourceType:      "LibreDsc.Databricks/ServicePrincipal",
-		Description:       "Manage Databricks service principals",
-		SchemaDescription: "Schema for managing Databricks service principals.",
-		ResourceName:      "service principal",
-		Tags:              []string{"databricks", "serviceprincipal", "iam", "workspace"},
-		Descriptions:      servicePrincipalPropertyDescriptions,
-		SchemaType:        reflect.TypeFor[ServicePrincipalSchemaInput](),
-	})
-}
-
 // ServicePrincipalState represents the full state of a Databricks service principal.
 type ServicePrincipalState struct {
-	DisplayName   string             `json:"display_name"`
-	ApplicationID string             `json:"application_id,omitempty"`
-	ExternalID    string             `json:"external_id,omitempty"`
-	ID            string             `json:"id,omitempty"`
-	Entitlements  []UserComplexValue `json:"entitlements,omitempty"`
-	Roles         []UserComplexValue `json:"roles,omitempty"`
-	Active        bool               `json:"active"`
-	Exist         bool               `json:"_exist"`
+	dsc.ExistProperty
+	DisplayName   string             `json:"display_name" description:"Display name of the service principal."`
+	ApplicationID string             `json:"application_id,omitempty" description:"UUID of the Azure app registration or identity relating to the service principal."`
+	ExternalID    string             `json:"external_id,omitempty" description:"External ID reserved for future use."`
+	ID            string             `json:"id,omitempty" description:"Databricks service principal ID."`
+	Entitlements  []UserComplexValue `json:"entitlements,omitempty" description:"Entitlements assigned to the service principal."`
+	Roles         []UserComplexValue `json:"roles,omitempty" description:"Corresponds to AWS instance profile/ARN role."`
+	Active        bool               `json:"active" dsc:"optional" description:"If this service principal is active."`
+}
+
+func servicePrincipalConfig() dsc.ResourceConfig {
+	return dsc.ResourceConfig{
+		Type:        "LibreDsc.Databricks/ServicePrincipal",
+		Version:     "0.1.0",
+		Description: "Manage Databricks service principals",
+		Tags:        []string{"databricks", "serviceprincipal", "iam", "workspace"},
+		SetReturn:   dsc.SetReturnStateAndDiff,
+		SchemaOptions: dsc.SchemaOptions{
+			SchemaDescription:         "Schema for managing Databricks service principals.",
+			AllowAdditionalProperties: true,
+		},
+	}
 }
 
 // ServicePrincipalHandler handles ServicePrincipal resource operations.
 type ServicePrincipalHandler struct{}
 
 func spToState(sp *iam.ServicePrincipal) ServicePrincipalState {
-	return ServicePrincipalState{
+	state := ServicePrincipalState{
 		DisplayName:   sp.DisplayName,
 		ApplicationID: sp.ApplicationId,
 		ExternalID:    sp.ExternalId,
@@ -72,95 +46,84 @@ func spToState(sp *iam.ServicePrincipal) ServicePrincipalState {
 		Roles:         fromIamComplexValues(sp.Roles),
 		ID:            sp.Id,
 		Active:        sp.Active,
-		Exist:         true,
 	}
+	state.SetExist(true)
+	return state
 }
 
-func (h *ServicePrincipalHandler) getCurrentState(ctx dsc.ResourceContext, req *ServicePrincipalSchemaInput) (ServicePrincipalState, error) {
-	cmdCtx, w, err := getWorkspaceClient(ctx)
-	if err != nil {
-		return ServicePrincipalState{Exist: false}, err
+func (h *ServicePrincipalHandler) Get(ctx context.Context, in ServicePrincipalState) (ServicePrincipalState, error) {
+	if err := requireAtLeastOne("id or display_name", in.ID, in.DisplayName); err != nil {
+		return in, err
 	}
 
-	if req.ID != "" {
-		dsc.Logger.Debugf(dsc.MsgLookup, "ServicePrincipal", "id="+req.ID)
-		sp, err := w.ServicePrincipalsV2.Get(cmdCtx, iam.GetServicePrincipalRequest{Id: req.ID})
+	w, err := workspaceClient()
+	if err != nil {
+		return in, err
+	}
+
+	if in.ID != "" {
+		dsc.Logger.Debugf(MsgLookup, "ServicePrincipal", "id="+in.ID)
+		sp, err := w.ServicePrincipalsV2.Get(ctx, iam.GetServicePrincipalRequest{Id: in.ID})
 		if err != nil {
-			dsc.Logger.Infof(dsc.MsgNotFound, "ServicePrincipal", "id="+req.ID)
-			return ServicePrincipalState{Exist: false}, nil
+			dsc.Logger.Infof(MsgNotFound, "ServicePrincipal", "id="+in.ID)
+			return dsc.NotFound(ServicePrincipalState{ID: in.ID, DisplayName: in.DisplayName}, "ServicePrincipal", "id="+in.ID)
 		}
 		return spToState(sp), nil
 	}
 
-	if req.DisplayName != "" {
-		dsc.Logger.Debugf(dsc.MsgLookup, "ServicePrincipal", "display_name="+req.DisplayName)
-		sps := w.ServicePrincipalsV2.List(cmdCtx, iam.ListServicePrincipalsRequest{
-			Filter: "displayName eq \"" + req.DisplayName + "\"",
-		})
+	dsc.Logger.Debugf(MsgLookup, "ServicePrincipal", "display_name="+in.DisplayName)
+	sps := w.ServicePrincipalsV2.List(ctx, iam.ListServicePrincipalsRequest{
+		Filter: "displayName eq \"" + in.DisplayName + "\"",
+	})
 
-		sp, err := sps.Next(cmdCtx)
-		if err != nil {
-			dsc.Logger.Infof(dsc.MsgNotFound, "ServicePrincipal", "display_name="+req.DisplayName)
-			return ServicePrincipalState{DisplayName: req.DisplayName, Exist: false}, nil
-		}
-		return spToState(&sp), nil
+	sp, err := sps.Next(ctx)
+	if err != nil {
+		dsc.Logger.Infof(MsgNotFound, "ServicePrincipal", "display_name="+in.DisplayName)
+		return dsc.NotFound(ServicePrincipalState{DisplayName: in.DisplayName}, "ServicePrincipal", "display_name="+in.DisplayName)
 	}
-
-	return ServicePrincipalState{Exist: false}, fmt.Errorf("id or display_name must be provided")
+	return spToState(&sp), nil
 }
 
-func (h *ServicePrincipalHandler) Get(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.GetResult, error) {
-	req, err := dsc.UnmarshalInput[ServicePrincipalSchemaInput](input)
-	if err != nil {
-		return nil, err
+func (h *ServicePrincipalHandler) Set(ctx context.Context, desired ServicePrincipalState) (ServicePrincipalState, error) {
+	if err := requireAtLeastOne("id or display_name", desired.ID, desired.DisplayName); err != nil {
+		return desired, err
 	}
 
-	state, err := h.getCurrentState(ctx, &req)
+	current, err := h.Get(ctx, desired)
 	if err != nil {
-		return nil, err
+		return desired, err
 	}
 
-	return &dsc.GetResult{ActualState: state}, nil
-}
-
-func (h *ServicePrincipalHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.SetResult, error) {
-	schemaInput, err := dsc.UnmarshalInput[ServicePrincipalSchemaInput](input)
+	w, err := workspaceClient()
 	if err != nil {
-		return nil, err
+		return desired, err
 	}
 
-	beforeState, _ := h.getCurrentState(ctx, &schemaInput)
-
-	cmdCtx, w, err := getWorkspaceClient(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if beforeState.Exist {
-		dsc.Logger.Infof(dsc.MsgUpdate, "ServicePrincipal", "id="+beforeState.ID)
+	if current.ShouldExist() {
+		dsc.Logger.Infof(MsgUpdate, "ServicePrincipal", "id="+current.ID)
 		// Service principal already exists — GET the full object, overlay desired
 		// fields, then PUT back via Update (SCIM PUT requires the complete representation).
-		full, err := w.ServicePrincipalsV2.Get(cmdCtx, iam.GetServicePrincipalRequest{Id: beforeState.ID})
+		full, err := w.ServicePrincipalsV2.Get(ctx, iam.GetServicePrincipalRequest{Id: current.ID})
 		if err != nil {
-			return nil, fmt.Errorf("failed to get service principal for update: %w", err)
+			return desired, fmt.Errorf("failed to get service principal for update: %w", err)
 		}
-		if schemaInput.DisplayName != "" {
-			full.DisplayName = schemaInput.DisplayName
+		if desired.DisplayName != "" {
+			full.DisplayName = desired.DisplayName
 		}
-		full.Active = schemaInput.Active
-		if schemaInput.ApplicationID != "" {
-			full.ApplicationId = schemaInput.ApplicationID
+		full.Active = desired.Active
+		if desired.ApplicationID != "" {
+			full.ApplicationId = desired.ApplicationID
 		}
-		if schemaInput.ExternalID != "" {
-			full.ExternalId = schemaInput.ExternalID
+		if desired.ExternalID != "" {
+			full.ExternalId = desired.ExternalID
 		}
-		if len(schemaInput.Entitlements) > 0 {
-			full.Entitlements = toIamComplexValues(schemaInput.Entitlements)
+		if len(desired.Entitlements) > 0 {
+			full.Entitlements = toIamComplexValues(desired.Entitlements)
 		}
-		if len(schemaInput.Roles) > 0 {
-			full.Roles = toIamComplexValues(schemaInput.Roles)
+		if len(desired.Roles) > 0 {
+			full.Roles = toIamComplexValues(desired.Roles)
 		}
-		if err := w.ServicePrincipalsV2.Update(cmdCtx, iam.UpdateServicePrincipalRequest{
+		if err := w.ServicePrincipalsV2.Update(ctx, iam.UpdateServicePrincipalRequest{
 			Id:              full.Id,
 			DisplayName:     full.DisplayName,
 			Active:          full.Active,
@@ -172,116 +135,90 @@ func (h *ServicePrincipalHandler) Set(ctx dsc.ResourceContext, input json.RawMes
 			Schemas:         full.Schemas,
 			ForceSendFields: []string{"Active"},
 		}); err != nil {
-			return nil, fmt.Errorf("failed to update service principal: %w", err)
+			return desired, fmt.Errorf("failed to update service principal: %w", err)
 		}
-		schemaInput.ID = beforeState.ID
-	} else if schemaInput.DisplayName != "" {
-		dsc.Logger.Infof(dsc.MsgCreate, "ServicePrincipal", "display_name="+schemaInput.DisplayName)
-		// Service principal does not exist — create it.
-		created, err := w.ServicePrincipalsV2.Create(cmdCtx, iam.CreateServicePrincipalRequest{
-			DisplayName:   schemaInput.DisplayName,
-			Active:        schemaInput.Active,
-			ApplicationId: schemaInput.ApplicationID,
-			ExternalId:    schemaInput.ExternalID,
-			Entitlements:  toIamComplexValues(schemaInput.Entitlements),
-			Roles:         toIamComplexValues(schemaInput.Roles),
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to create service principal: %w", err)
-		}
-		schemaInput.ID = created.Id
+		desired.ID = current.ID
 	} else {
-		return nil, dsc.ValidateRequired(dsc.RequiredField{Name: "display_name", Value: ""})
-	}
-
-	afterState, _ := h.getCurrentState(ctx, &schemaInput)
-	changedProps := dsc.CompareStates(beforeState, afterState)
-
-	return &dsc.SetResult{
-		BeforeState:       beforeState,
-		AfterState:        afterState,
-		ChangedProperties: changedProps,
-	}, nil
-}
-
-func (h *ServicePrincipalHandler) Test(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.TestResult, error) {
-	schemaInput, err := dsc.UnmarshalInput[ServicePrincipalSchemaInput](input)
-	if err != nil {
-		return nil, err
-	}
-
-	actualState, err := h.getCurrentState(ctx, &schemaInput)
-	if err != nil {
-		return nil, err
-	}
-
-	desiredState := ServicePrincipalState{
-		ID:           schemaInput.ID,
-		DisplayName:  schemaInput.DisplayName,
-		ApplicationID: schemaInput.ApplicationID,
-		ExternalID:   schemaInput.ExternalID,
-		Active:       schemaInput.Active,
-		Entitlements: schemaInput.Entitlements,
-		Roles:        schemaInput.Roles,
-		Exist:        true,
-	}
-
-	differing := dsc.CompareStates(desiredState, actualState)
-	inDesiredState := len(differing) == 0
-
-	return &dsc.TestResult{
-		DesiredState:        desiredState,
-		ActualState:         actualState,
-		InDesiredState:      inDesiredState,
-		DifferingProperties: differing,
-	}, nil
-}
-
-func (h *ServicePrincipalHandler) Delete(ctx dsc.ResourceContext, input json.RawMessage) error {
-	schemaInput, err := dsc.UnmarshalInput[ServicePrincipalSchemaInput](input)
-	if err != nil {
-		return err
-	}
-
-	cmdCtx, w, err := getWorkspaceClient(ctx)
-	if err != nil {
-		return err
-	}
-
-	if schemaInput.ID != "" {
-		dsc.Logger.Debugf(dsc.MsgDelete, "ServicePrincipal", "id="+schemaInput.ID)
-		return w.ServicePrincipalsV2.Delete(cmdCtx, iam.DeleteServicePrincipalRequest{Id: schemaInput.ID})
-	}
-
-	if schemaInput.DisplayName != "" {
-		dsc.Logger.Debugf(dsc.MsgDelete, "ServicePrincipal", "display_name="+schemaInput.DisplayName)
-		sps := w.ServicePrincipalsV2.List(cmdCtx, iam.ListServicePrincipalsRequest{
-			Filter: "displayName eq \"" + schemaInput.DisplayName + "\"",
-		})
-
-		sp, err := sps.Next(cmdCtx)
-		if err != nil {
-			return dsc.NotFoundError("service principal", "display_name="+schemaInput.DisplayName)
+		dsc.Logger.Infof(MsgCreate, "ServicePrincipal", "display_name="+desired.DisplayName)
+		// Service principal does not exist — create it.
+		if err := requireFields(field{"display_name", desired.DisplayName}); err != nil {
+			return desired, err
 		}
-		return w.ServicePrincipalsV2.Delete(cmdCtx, iam.DeleteServicePrincipalRequest{Id: sp.Id})
+		created, err := w.ServicePrincipalsV2.Create(ctx, iam.CreateServicePrincipalRequest{
+			DisplayName:   desired.DisplayName,
+			Active:        desired.Active,
+			ApplicationId: desired.ApplicationID,
+			ExternalId:    desired.ExternalID,
+			Entitlements:  toIamComplexValues(desired.Entitlements),
+			Roles:         toIamComplexValues(desired.Roles),
+		})
+		if err != nil {
+			return desired, fmt.Errorf("failed to create service principal: %w", err)
+		}
+		desired.ID = created.Id
 	}
 
-	return dsc.ValidateRequired(dsc.RequiredField{Name: "id or display_name", Value: ""})
+	return h.Get(ctx, desired)
 }
 
-func (h *ServicePrincipalHandler) Export(ctx dsc.ResourceContext) ([]any, error) {
-	cmdCtx, w, err := getWorkspaceClient(ctx)
+func (h *ServicePrincipalHandler) Test(ctx context.Context, desired ServicePrincipalState) (dsc.TestResult[ServicePrincipalState], error) {
+	actual, err := h.Get(ctx, desired)
+	if err != nil {
+		return dsc.TestResult[ServicePrincipalState]{}, err
+	}
+
+	result := dsc.TestResult[ServicePrincipalState]{ActualState: actual}
+	if !actual.ShouldExist() {
+		// CompareStates skips canonical properties; report existence drift explicitly.
+		result.DifferingProperties = []string{"_exist"}
+		return result, nil
+	}
+	result.DifferingProperties = dsc.CompareStates(desired, actual)
+	return result, nil
+}
+
+func (h *ServicePrincipalHandler) Delete(ctx context.Context, in ServicePrincipalState) error {
+	if err := requireAtLeastOne("id or display_name", in.ID, in.DisplayName); err != nil {
+		return err
+	}
+
+	w, err := workspaceClient()
+	if err != nil {
+		return err
+	}
+
+	if in.ID != "" {
+		dsc.Logger.Debugf(MsgDelete, "ServicePrincipal", "id="+in.ID)
+		return w.ServicePrincipalsV2.Delete(ctx, iam.DeleteServicePrincipalRequest{Id: in.ID})
+	}
+
+	dsc.Logger.Debugf(MsgDelete, "ServicePrincipal", "display_name="+in.DisplayName)
+	sps := w.ServicePrincipalsV2.List(ctx, iam.ListServicePrincipalsRequest{
+		Filter: "displayName eq \"" + in.DisplayName + "\"",
+	})
+
+	sp, err := sps.Next(ctx)
+	if err != nil {
+		// Already absent — deleting a missing instance succeeds.
+		dsc.Logger.Infof(MsgNotFound, "ServicePrincipal", "display_name="+in.DisplayName)
+		return nil
+	}
+	return w.ServicePrincipalsV2.Delete(ctx, iam.DeleteServicePrincipalRequest{Id: sp.Id})
+}
+
+func (h *ServicePrincipalHandler) Export(ctx context.Context, _ ServicePrincipalState) ([]ServicePrincipalState, error) {
+	w, err := workspaceClient()
 	if err != nil {
 		return nil, err
 	}
 
-	dsc.Logger.Debugf(dsc.MsgListAll, "ServicePrincipal")
-	sps, err := w.ServicePrincipalsV2.ListAll(cmdCtx, iam.ListServicePrincipalsRequest{})
+	dsc.Logger.Debugf(MsgListAll, "ServicePrincipal")
+	sps, err := w.ServicePrincipalsV2.ListAll(ctx, iam.ListServicePrincipalsRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list service principals: %w", err)
 	}
 
-	var allSPs []any
+	var allSPs []ServicePrincipalState
 	for i := range sps {
 		allSPs = append(allSPs, spToState(&sps[i]))
 	}

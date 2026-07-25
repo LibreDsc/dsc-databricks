@@ -2,65 +2,34 @@ package resources
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"reflect"
 	"strconv"
 
-	"github.com/LibreDsc/dsc-databricks/internal/dsc"
+	dsc "github.com/LibreDsc/dsc-go-rdk"
 	"github.com/databricks/databricks-sdk-go"
 	"github.com/databricks/databricks-sdk-go/service/settings"
 )
 
-func init() {
-	dsc.RegisterResourceWithMetadata(
-		"LibreDsc.Databricks/WorkspaceSetting",
-		&WorkspaceSettingHandler{},
-		workspaceSettingMetadata(),
-	)
-}
-
-// Workspace setting property descriptions.
-var workspaceSettingPropertyDescriptions = dsc.PropertyDescriptions{
-	"setting_name": "Name of the workspace setting. Valid values: " +
-		"aibi_dashboard_embedding_access_policy, " +
-		"automatic_cluster_update, compliance_security_profile, " +
-		"dashboard_email_subscriptions, default_namespace, default_warehouse_id, " +
-		"disable_legacy_access, disable_legacy_dbfs, " +
-		"enable_export_notebook, enable_notebook_table_clipboard, enable_results_downloading, " +
-		"enhanced_security_monitoring, llm_proxy_partner_powered, " +
-		"restrict_workspace_admins, sql_results_download.",
-	"value": "The setting value. For boolean settings use 'true' or 'false'. " +
-		"For string settings use the string value. For enum settings use the enum constant " +
-		"(e.g. ALLOW_ALL, RESTRICT_TOKENS_AND_JOB_RUN_AS, ALLOW_APPROVED_DOMAINS).",
-	"etag": "Etag for optimistic concurrency control. Populated on read, used for updates. Read-only.",
-}
-
-// WorkspaceSettingSchemaInput defines the desired-state fields.
-type WorkspaceSettingSchemaInput struct {
-	SettingName string `json:"setting_name"`
-	Value       string `json:"value,omitempty"`
-}
-
-func workspaceSettingMetadata() dsc.ResourceMetadata {
-	return dsc.BuildMetadata(dsc.MetadataConfig{
-		ResourceType:      "LibreDsc.Databricks/WorkspaceSetting",
-		Description:       "Manage Databricks workspace-level settings.",
-		SchemaDescription: "Schema for managing Databricks workspace-level settings.",
-		ResourceName:      "workspace_setting",
-		Tags:              []string{"databricks", "settings", "workspace"},
-		Descriptions:      workspaceSettingPropertyDescriptions,
-		SchemaType:        reflect.TypeFor[WorkspaceSettingSchemaInput](),
-		OmitTest:          true,
-	})
-}
-
 // WorkspaceSettingState represents the state of a single workspace setting.
 type WorkspaceSettingState struct {
-	SettingName string `json:"setting_name"`
-	Value       string `json:"value,omitempty"`
-	Etag        string `json:"etag,omitempty"`
-	Exist       bool   `json:"_exist"`
+	dsc.ExistProperty
+	SettingName string `json:"setting_name" description:"Name of the workspace setting. Valid values: aibi_dashboard_embedding_access_policy, automatic_cluster_update, compliance_security_profile, dashboard_email_subscriptions, default_namespace, default_warehouse_id, disable_legacy_access, disable_legacy_dbfs, enable_export_notebook, enable_notebook_table_clipboard, enable_results_downloading, enhanced_security_monitoring, llm_proxy_partner_powered, restrict_workspace_admins, sql_results_download."`
+	Value       string `json:"value,omitempty" description:"The setting value. For boolean settings use 'true' or 'false'. For string settings use the string value. For enum settings use the enum constant (e.g. ALLOW_ALL, RESTRICT_TOKENS_AND_JOB_RUN_AS, ALLOW_APPROVED_DOMAINS)."`
+	Etag        string `json:"etag,omitempty" description:"Etag for optimistic concurrency control. Populated on read, used for updates. (read-only)"`
+}
+
+func workspaceSettingConfig() dsc.ResourceConfig {
+	return dsc.ResourceConfig{
+		Type:        "LibreDsc.Databricks/WorkspaceSetting",
+		Version:     "0.1.0",
+		Description: "Manage Databricks workspace-level settings.",
+		Tags:        []string{"databricks", "settings", "workspace"},
+		SetReturn:   dsc.SetReturnStateAndDiff,
+		SchemaOptions: dsc.SchemaOptions{
+			SchemaDescription:         "Schema for managing Databricks workspace-level settings.",
+			AllowAdditionalProperties: true,
+		},
+	}
 }
 
 // WorkspaceSettingHandler handles WorkspaceSetting resource operations.
@@ -489,162 +458,80 @@ func allSettingNames() []string {
 	return names
 }
 
-func (h *WorkspaceSettingHandler) getCurrentState(ctx dsc.ResourceContext, settingName string) (WorkspaceSettingState, error) {
-	def, ok := settingRegistry[settingName]
+func (h *WorkspaceSettingHandler) Get(ctx context.Context, in WorkspaceSettingState) (WorkspaceSettingState, error) {
+	if err := requireFields(field{"setting_name", in.SettingName}); err != nil {
+		return in, err
+	}
+
+	def, ok := settingRegistry[in.SettingName]
 	if !ok {
-		return WorkspaceSettingState{
-			SettingName: settingName,
-			Exist:       false,
-		}, fmt.Errorf("unsupported setting_name %q", settingName)
+		return in, dsc.NewExitCodeErrorf(dsc.ExitInvalidInput, "unsupported setting_name %q", in.SettingName)
 	}
 
-	cmdCtx, w, err := getWorkspaceClient(ctx)
+	w, err := workspaceClient()
 	if err != nil {
-		return WorkspaceSettingState{SettingName: settingName, Exist: false}, err
+		return in, err
 	}
 
-	dsc.Logger.Debugf(dsc.MsgLookup, "WorkspaceSetting", "setting_name="+settingName)
-
-	value, etag, err := def.get(cmdCtx, w)
+	dsc.Logger.Debugf(MsgLookup, "WorkspaceSetting", "setting_name="+in.SettingName)
+	value, etag, err := def.get(ctx, w)
 	if err != nil {
 		// Settings always exist on a workspace; an error here is a real error
 		// (e.g. permission denied), not a not-found.
-		return WorkspaceSettingState{SettingName: settingName, Exist: false}, err
+		return in, err
 	}
 
-	return WorkspaceSettingState{
-		SettingName: settingName,
-		Value:       value,
-		Etag:        etag,
-		Exist:       true,
-	}, nil
+	state := WorkspaceSettingState{SettingName: in.SettingName, Value: value, Etag: etag}
+	state.SetExist(true)
+	return state, nil
 }
 
-func (h *WorkspaceSettingHandler) Get(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.GetResult, error) {
-	req, err := dsc.UnmarshalInput[WorkspaceSettingSchemaInput](input)
-	if err != nil {
-		return nil, err
-	}
-	if err := dsc.ValidateRequired(dsc.RequiredField{Name: "setting_name", Value: req.SettingName}); err != nil {
-		return nil, err
-	}
-
-	state, err := h.getCurrentState(ctx, req.SettingName)
-	if err != nil {
-		return nil, err
-	}
-
-	return &dsc.GetResult{ActualState: state}, nil
-}
-
-func (h *WorkspaceSettingHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.SetResult, error) {
-	schemaInput, err := dsc.UnmarshalInput[WorkspaceSettingSchemaInput](input)
-	if err != nil {
-		return nil, err
-	}
-	if err := dsc.ValidateRequired(
-		dsc.RequiredField{Name: "setting_name", Value: schemaInput.SettingName},
-		dsc.RequiredField{Name: "value", Value: schemaInput.Value},
+func (h *WorkspaceSettingHandler) Set(ctx context.Context, desired WorkspaceSettingState) (WorkspaceSettingState, error) {
+	if err := requireFields(
+		field{"setting_name", desired.SettingName},
+		field{"value", desired.Value},
 	); err != nil {
-		return nil, err
+		return desired, err
 	}
 
-	def, ok := settingRegistry[schemaInput.SettingName]
+	def, ok := settingRegistry[desired.SettingName]
 	if !ok {
-		return nil, fmt.Errorf("unsupported setting_name %q", schemaInput.SettingName)
+		return desired, dsc.NewExitCodeErrorf(dsc.ExitInvalidInput, "unsupported setting_name %q", desired.SettingName)
 	}
 
-	cmdCtx, w, err := getWorkspaceClient(ctx)
+	w, err := workspaceClient()
 	if err != nil {
-		return nil, err
+		return desired, err
 	}
 
-	// Read current value and etag.
-	currentValue, etag, getErr := def.get(cmdCtx, w)
-	beforeState := WorkspaceSettingState{
-		SettingName: schemaInput.SettingName,
-		Value:       currentValue,
-		Etag:        etag,
-		Exist:       getErr == nil,
-	}
-
-	if getErr != nil {
-		return nil, fmt.Errorf("failed to read current setting: %w", getErr)
-	}
-
-	// Update the setting value using the etag for optimistic concurrency.
-	dsc.Logger.Infof(dsc.MsgUpdate, "WorkspaceSetting", "setting_name="+schemaInput.SettingName)
-	if err := def.update(cmdCtx, w, schemaInput.Value, etag); err != nil {
-		return nil, fmt.Errorf("failed to update setting %q: %w", schemaInput.SettingName, err)
-	}
-
-	// Re-read to capture the after state.
-	afterValue, afterEtag, err := def.get(cmdCtx, w)
+	// Read the current etag for optimistic concurrency.
+	_, etag, err := def.get(ctx, w)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read updated setting: %w", err)
+		return desired, fmt.Errorf("failed to read current setting: %w", err)
 	}
 
-	afterState := WorkspaceSettingState{
-		SettingName: schemaInput.SettingName,
-		Value:       afterValue,
-		Etag:        afterEtag,
-		Exist:       true,
+	dsc.Logger.Infof(MsgUpdate, "WorkspaceSetting", "setting_name="+desired.SettingName)
+	if err := def.update(ctx, w, desired.Value, etag); err != nil {
+		return desired, fmt.Errorf("failed to update setting %q: %w", desired.SettingName, err)
 	}
 
-	changedProps := dsc.CompareAllStates(beforeState, afterState)
-
-	return &dsc.SetResult{
-		BeforeState:       beforeState,
-		AfterState:        afterState,
-		ChangedProperties: changedProps,
-	}, nil
+	return h.Get(ctx, desired)
 }
 
-func (h *WorkspaceSettingHandler) Test(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.TestResult, error) {
-	schemaInput, err := dsc.UnmarshalInput[WorkspaceSettingSchemaInput](input)
-	if err != nil {
-		return nil, err
-	}
-	if err := dsc.ValidateRequired(dsc.RequiredField{Name: "setting_name", Value: schemaInput.SettingName}); err != nil {
-		return nil, err
-	}
-
-	actualState, err := h.getCurrentState(ctx, schemaInput.SettingName)
-	if err != nil {
-		return nil, err
-	}
-
-	desiredState := WorkspaceSettingState{
-		SettingName: schemaInput.SettingName,
-		Value:       schemaInput.Value,
-		Exist:       true,
-	}
-
-	differing := dsc.CompareStates(desiredState, actualState)
-	inDesiredState := len(differing) == 0
-
-	return &dsc.TestResult{
-		DesiredState:        desiredState,
-		ActualState:         actualState,
-		InDesiredState:      inDesiredState,
-		DifferingProperties: differing,
-	}, nil
-}
-
-func (h *WorkspaceSettingHandler) Delete(_ dsc.ResourceContext, _ json.RawMessage) error {
+func (h *WorkspaceSettingHandler) Delete(_ context.Context, _ WorkspaceSettingState) error {
 	// Workspace settings cannot be deleted — they always exist on a workspace.
 	// A Delete call is a no-op.  The user should set the value to the desired
 	// default instead.
 	return nil
 }
 
-func (h *WorkspaceSettingHandler) Export(ctx dsc.ResourceContext) ([]any, error) {
-	var all []any
+func (h *WorkspaceSettingHandler) Export(ctx context.Context, _ WorkspaceSettingState) ([]WorkspaceSettingState, error) {
+	var all []WorkspaceSettingState
 	for _, name := range allSettingNames() {
-		state, err := h.getCurrentState(ctx, name)
+		state, err := h.Get(ctx, WorkspaceSettingState{SettingName: name})
 		if err != nil {
 			// Skip settings where we don't have permission.
-			dsc.Logger.Infof(dsc.MsgSkipping, "WorkspaceSetting", name, err)
+			dsc.Logger.Infof(MsgSkipping, "WorkspaceSetting", name, err)
 			continue
 		}
 		all = append(all, state)

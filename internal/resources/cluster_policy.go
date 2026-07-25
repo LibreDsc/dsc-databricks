@@ -1,283 +1,193 @@
 package resources
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
-	"reflect"
 
-	"github.com/LibreDsc/dsc-databricks/internal/dsc"
+	dsc "github.com/LibreDsc/dsc-go-rdk"
 	"github.com/databricks/databricks-sdk-go/service/compute"
 )
 
-func init() {
-	dsc.RegisterResourceWithMetadata("LibreDsc.Databricks/ClusterPolicy", &ClusterPolicyHandler{}, clusterPolicyMetadata())
-}
-
-// ClusterPolicy property descriptions from SDK documentation.
-var clusterPolicyPropertyDescriptions = dsc.PropertyDescriptions{
-	"policy_id":                          "Canonical unique identifier for the cluster policy. Computed on create.",
-	"name":                               "Cluster policy name. Must be unique. Length must be between 1 and 100 characters.",
-	"definition":                         "Policy definition document expressed in Databricks Cluster Policy Definition Language (JSON string).",
-	"description":                        "Additional human-readable description of the cluster policy.",
-	"max_clusters_per_user":              "Max number of clusters per user that can be active using this policy. If not present, there is no limit.",
-	"policy_family_id":                   "ID of the policy family whose definition this policy inherits. Cannot be used with definition.",
-	"policy_family_definition_overrides": "Policy definition JSON document to customize the inherited policy family definition.",
-}
-
-// ClusterPolicySchemaInput defines the desired-state fields for the schema
-// and for unmarshaling input. policy_id is computed on create; name is the
-// human-readable identifier used for lookup — both carry omitempty so that
-// inputs supplying only one of the two pass schema validation.
-type ClusterPolicySchemaInput struct {
-	Name                            string `json:"name,omitempty"`
-	PolicyID                        string `json:"policy_id,omitempty"`
-	Definition                      string `json:"definition,omitempty"`
-	Description                     string `json:"description,omitempty"`
-	PolicyFamilyID                  string `json:"policy_family_id,omitempty"`
-	PolicyFamilyDefinitionOverrides string `json:"policy_family_definition_overrides,omitempty"`
-	MaxClustersPerUser              int64  `json:"max_clusters_per_user,omitempty"`
-}
-
-func clusterPolicyMetadata() dsc.ResourceMetadata {
-	return dsc.BuildMetadata(dsc.MetadataConfig{
-		ResourceType:      "LibreDsc.Databricks/ClusterPolicy",
-		Description:       "Manage Databricks cluster policies.",
-		SchemaDescription: "Schema for managing Databricks cluster policies.",
-		ResourceName:      "cluster_policy",
-		Tags:              []string{"databricks", "clusterpolicy", "compute"},
-		Descriptions:      clusterPolicyPropertyDescriptions,
-		SchemaType:        reflect.TypeFor[ClusterPolicySchemaInput](),
-		// definition is a JSON string; the server may normalise key ordering so
-		// synthetic Test (which compares the raw string values) is sufficient —
-		// both synthetic and custom implementations would behave identically here.
-		OmitTest: true,
-	})
-}
-
 // ClusterPolicyState represents the full state of a Databricks cluster policy.
+// policy_id is computed on create; name is the human-readable identifier used
+// for lookup — both are optional so inputs supplying only one of the two pass
+// schema validation.
 type ClusterPolicyState struct {
-	Name                            string `json:"name,omitempty"`
-	PolicyID                        string `json:"policy_id,omitempty"`
-	Definition                      string `json:"definition,omitempty"`
-	Description                     string `json:"description,omitempty"`
-	PolicyFamilyID                  string `json:"policy_family_id,omitempty"`
-	PolicyFamilyDefinitionOverrides string `json:"policy_family_definition_overrides,omitempty"`
-	MaxClustersPerUser              int64  `json:"max_clusters_per_user,omitempty"`
-	Exist                           bool   `json:"_exist"`
+	dsc.ExistProperty
+	Name                            string `json:"name,omitempty" description:"Cluster policy name. Must be unique. Length must be between 1 and 100 characters."`
+	PolicyID                        string `json:"policy_id,omitempty" description:"Canonical unique identifier for the cluster policy. Computed on create."`
+	Definition                      string `json:"definition,omitempty" description:"Policy definition document expressed in Databricks Cluster Policy Definition Language (JSON string)."`
+	Description                     string `json:"description,omitempty" description:"Additional human-readable description of the cluster policy."`
+	PolicyFamilyID                  string `json:"policy_family_id,omitempty" description:"ID of the policy family whose definition this policy inherits. Cannot be used with definition."`
+	PolicyFamilyDefinitionOverrides string `json:"policy_family_definition_overrides,omitempty" description:"Policy definition JSON document to customize the inherited policy family definition."`
+	MaxClustersPerUser              int64  `json:"max_clusters_per_user,omitempty" description:"Max number of clusters per user that can be active using this policy. If not present, there is no limit."`
 }
 
-// ClusterPolicyHandler handles ClusterPolicy resource operations.
+func clusterPolicyConfig() dsc.ResourceConfig {
+	return dsc.ResourceConfig{
+		Type:        "LibreDsc.Databricks/ClusterPolicy",
+		Version:     "0.1.0",
+		Description: "Manage Databricks cluster policies.",
+		Tags:        []string{"databricks", "clusterpolicy", "compute"},
+		SetReturn:   dsc.SetReturnStateAndDiff,
+		SchemaOptions: dsc.SchemaOptions{
+			SchemaDescription:         "Schema for managing Databricks cluster policies.",
+			AllowAdditionalProperties: true,
+		},
+	}
+}
+
+// ClusterPolicyHandler handles ClusterPolicy resource operations. definition is
+// a JSON string; the server may normalise key ordering so the DSC synthetic
+// test (raw value equality) is sufficient — no Testable is implemented.
 type ClusterPolicyHandler struct{}
 
 func policyToState(p *compute.Policy) ClusterPolicyState {
-	return ClusterPolicyState{
-		PolicyID:                       p.PolicyId,
-		Name:                           p.Name,
-		Definition:                     p.Definition,
-		Description:                    p.Description,
-		MaxClustersPerUser:             p.MaxClustersPerUser,
-		PolicyFamilyID:                 p.PolicyFamilyId,
+	state := ClusterPolicyState{
+		PolicyID:                        p.PolicyId,
+		Name:                            p.Name,
+		Definition:                      p.Definition,
+		Description:                     p.Description,
+		MaxClustersPerUser:              p.MaxClustersPerUser,
+		PolicyFamilyID:                  p.PolicyFamilyId,
 		PolicyFamilyDefinitionOverrides: p.PolicyFamilyDefinitionOverrides,
-		Exist:                          true,
 	}
+	state.SetExist(true)
+	return state
 }
 
-func (h *ClusterPolicyHandler) getCurrentState(ctx dsc.ResourceContext, req *ClusterPolicySchemaInput) (ClusterPolicyState, error) {
-	cmdCtx, w, err := getWorkspaceClient(ctx)
-	if err != nil {
-		return ClusterPolicyState{Exist: false}, err
+func (h *ClusterPolicyHandler) Get(ctx context.Context, in ClusterPolicyState) (ClusterPolicyState, error) {
+	if err := requireAtLeastOne("policy_id or name", in.PolicyID, in.Name); err != nil {
+		return in, err
 	}
 
-	if req.PolicyID != "" {
-		dsc.Logger.Debugf(dsc.MsgLookup, "ClusterPolicy", "policy_id="+req.PolicyID)
-		p, err := w.ClusterPolicies.Get(cmdCtx, compute.GetClusterPolicyRequest{PolicyId: req.PolicyID})
+	w, err := workspaceClient()
+	if err != nil {
+		return in, err
+	}
+
+	if in.PolicyID != "" {
+		dsc.Logger.Debugf(MsgLookup, "ClusterPolicy", "policy_id="+in.PolicyID)
+		p, err := w.ClusterPolicies.Get(ctx, compute.GetClusterPolicyRequest{PolicyId: in.PolicyID})
 		if err != nil {
-			dsc.Logger.Infof(dsc.MsgNotFound, "ClusterPolicy", "policy_id="+req.PolicyID)
-			return ClusterPolicyState{Exist: false}, nil
+			dsc.Logger.Infof(MsgNotFound, "ClusterPolicy", "policy_id="+in.PolicyID)
+			return dsc.NotFound(ClusterPolicyState{PolicyID: in.PolicyID}, "ClusterPolicy", "policy_id="+in.PolicyID)
 		}
 		return policyToState(p), nil
 	}
 
-	if req.Name != "" {
-		dsc.Logger.Debugf(dsc.MsgLookup, "ClusterPolicy", "name="+req.Name)
-		p, err := w.ClusterPolicies.GetByName(cmdCtx, req.Name)
-		if err != nil {
-			dsc.Logger.Infof(dsc.MsgNotFound, "ClusterPolicy", "name="+req.Name)
-			return ClusterPolicyState{Name: req.Name, Exist: false}, nil
-		}
-		return policyToState(p), nil
+	dsc.Logger.Debugf(MsgLookup, "ClusterPolicy", "name="+in.Name)
+	p, err := w.ClusterPolicies.GetByName(ctx, in.Name)
+	if err != nil {
+		dsc.Logger.Infof(MsgNotFound, "ClusterPolicy", "name="+in.Name)
+		return dsc.NotFound(ClusterPolicyState{Name: in.Name}, "ClusterPolicy", "name="+in.Name)
 	}
-
-	return ClusterPolicyState{Exist: false}, fmt.Errorf("policy_id or name must be provided")
+	return policyToState(p), nil
 }
 
-func (h *ClusterPolicyHandler) Get(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.GetResult, error) {
-	req, err := dsc.UnmarshalInput[ClusterPolicySchemaInput](input)
-	if err != nil {
-		return nil, err
-	}
-	if err := dsc.ValidateAtLeastOne("policy_id or name", req.PolicyID, req.Name); err != nil {
-		return nil, err
+func (h *ClusterPolicyHandler) Set(ctx context.Context, desired ClusterPolicyState) (ClusterPolicyState, error) {
+	if err := requireAtLeastOne("policy_id or name", desired.PolicyID, desired.Name); err != nil {
+		return desired, err
 	}
 
-	state, err := h.getCurrentState(ctx, &req)
+	current, err := h.Get(ctx, desired)
 	if err != nil {
-		return nil, err
+		return desired, err
 	}
-
-	return &dsc.GetResult{ActualState: state}, nil
-}
-
-func (h *ClusterPolicyHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.SetResult, error) {
-	schemaInput, err := dsc.UnmarshalInput[ClusterPolicySchemaInput](input)
-	if err != nil {
-		return nil, err
-	}
-	beforeState, _ := h.getCurrentState(ctx, &schemaInput)
 
 	// For create, name is required. For update, fall back to the server-held name.
-	effectiveName := schemaInput.Name
+	effectiveName := desired.Name
 	if effectiveName == "" {
-		effectiveName = beforeState.Name
-	}
-	if !beforeState.Exist {
-		if err := dsc.ValidateRequired(dsc.RequiredField{Name: "name", Value: effectiveName}); err != nil {
-			return nil, err
-		}
+		effectiveName = current.Name
 	}
 
-	cmdCtx, w, err := getWorkspaceClient(ctx)
+	w, err := workspaceClient()
 	if err != nil {
-		return nil, err
+		return desired, err
 	}
 
-	var afterState ClusterPolicyState
-
-	if beforeState.Exist {
-		dsc.Logger.Infof(dsc.MsgUpdate, "ClusterPolicy", "policy_id="+beforeState.PolicyID)
-		// Policy exists — edit it.
-		if err := w.ClusterPolicies.Edit(cmdCtx, compute.EditPolicy{
-			PolicyId:                       beforeState.PolicyID,
-			Name:                           effectiveName,
-			Definition:                     schemaInput.Definition,
-			Description:                    schemaInput.Description,
-			MaxClustersPerUser:             schemaInput.MaxClustersPerUser,
-			PolicyFamilyId:                 schemaInput.PolicyFamilyID,
-			PolicyFamilyDefinitionOverrides: schemaInput.PolicyFamilyDefinitionOverrides,
+	if current.ShouldExist() {
+		dsc.Logger.Infof(MsgUpdate, "ClusterPolicy", "policy_id="+current.PolicyID)
+		if err := w.ClusterPolicies.Edit(ctx, compute.EditPolicy{
+			PolicyId:                        current.PolicyID,
+			Name:                            effectiveName,
+			Definition:                      desired.Definition,
+			Description:                     desired.Description,
+			MaxClustersPerUser:              desired.MaxClustersPerUser,
+			PolicyFamilyId:                  desired.PolicyFamilyID,
+			PolicyFamilyDefinitionOverrides: desired.PolicyFamilyDefinitionOverrides,
 		}); err != nil {
-			return nil, fmt.Errorf("failed to update cluster policy: %w", err)
+			return desired, fmt.Errorf("failed to update cluster policy: %w", err)
 		}
 		// Re-fetch by ID (direct GET — strongly consistent).
-		updated, err := w.ClusterPolicies.Get(cmdCtx, compute.GetClusterPolicyRequest{PolicyId: beforeState.PolicyID})
+		updated, err := w.ClusterPolicies.Get(ctx, compute.GetClusterPolicyRequest{PolicyId: current.PolicyID})
 		if err != nil {
-			return nil, fmt.Errorf("failed to retrieve updated cluster policy: %w", err)
+			return desired, fmt.Errorf("failed to retrieve updated cluster policy: %w", err)
 		}
-		afterState = policyToState(updated)
-	} else {
-		dsc.Logger.Infof(dsc.MsgCreate, "ClusterPolicy", "name="+effectiveName)
-		// Policy does not exist — create it.
-		resp, err := w.ClusterPolicies.Create(cmdCtx, compute.CreatePolicy{
-			Name:                           effectiveName,
-			Definition:                     schemaInput.Definition,
-			Description:                    schemaInput.Description,
-			MaxClustersPerUser:             schemaInput.MaxClustersPerUser,
-			PolicyFamilyId:                 schemaInput.PolicyFamilyID,
-			PolicyFamilyDefinitionOverrides: schemaInput.PolicyFamilyDefinitionOverrides,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to create cluster policy: %w", err)
-		}
-		// Fetch the full policy using the new ID (direct GET — strongly consistent).
-		created, err := w.ClusterPolicies.Get(cmdCtx, compute.GetClusterPolicyRequest{PolicyId: resp.PolicyId})
-		if err != nil {
-			return nil, fmt.Errorf("failed to retrieve created cluster policy: %w", err)
-		}
-		afterState = policyToState(created)
+		return policyToState(updated), nil
 	}
 
-	changedProps := dsc.CompareAllStates(beforeState, afterState)
-
-	return &dsc.SetResult{
-		BeforeState:       beforeState,
-		AfterState:        afterState,
-		ChangedProperties: changedProps,
-	}, nil
+	dsc.Logger.Infof(MsgCreate, "ClusterPolicy", "name="+effectiveName)
+	if err := requireFields(field{"name", effectiveName}); err != nil {
+		return desired, err
+	}
+	resp, err := w.ClusterPolicies.Create(ctx, compute.CreatePolicy{
+		Name:                            effectiveName,
+		Definition:                      desired.Definition,
+		Description:                     desired.Description,
+		MaxClustersPerUser:              desired.MaxClustersPerUser,
+		PolicyFamilyId:                  desired.PolicyFamilyID,
+		PolicyFamilyDefinitionOverrides: desired.PolicyFamilyDefinitionOverrides,
+	})
+	if err != nil {
+		return desired, fmt.Errorf("failed to create cluster policy: %w", err)
+	}
+	// Fetch the full policy using the new ID (direct GET — strongly consistent).
+	created, err := w.ClusterPolicies.Get(ctx, compute.GetClusterPolicyRequest{PolicyId: resp.PolicyId})
+	if err != nil {
+		return desired, fmt.Errorf("failed to retrieve created cluster policy: %w", err)
+	}
+	return policyToState(created), nil
 }
 
-func (h *ClusterPolicyHandler) Test(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.TestResult, error) {
-	schemaInput, err := dsc.UnmarshalInput[ClusterPolicySchemaInput](input)
-	if err != nil {
-		return nil, err
+func (h *ClusterPolicyHandler) Delete(ctx context.Context, in ClusterPolicyState) error {
+	if err := requireAtLeastOne("policy_id or name", in.PolicyID, in.Name); err != nil {
+		return err
 	}
 
-	actualState, err := h.getCurrentState(ctx, &schemaInput)
-	if err != nil {
-		return nil, err
-	}
-
-	desiredState := ClusterPolicyState{
-		PolicyID:                       schemaInput.PolicyID,
-		Name:                           schemaInput.Name,
-		Definition:                     schemaInput.Definition,
-		Description:                    schemaInput.Description,
-		MaxClustersPerUser:             schemaInput.MaxClustersPerUser,
-		PolicyFamilyID:                 schemaInput.PolicyFamilyID,
-		PolicyFamilyDefinitionOverrides: schemaInput.PolicyFamilyDefinitionOverrides,
-		Exist:                          true,
-	}
-
-	differing := dsc.CompareStates(desiredState, actualState)
-	inDesiredState := len(differing) == 0
-
-	return &dsc.TestResult{
-		DesiredState:        desiredState,
-		ActualState:         actualState,
-		InDesiredState:      inDesiredState,
-		DifferingProperties: differing,
-	}, nil
-}
-
-func (h *ClusterPolicyHandler) Delete(ctx dsc.ResourceContext, input json.RawMessage) error {
-	schemaInput, err := dsc.UnmarshalInput[ClusterPolicySchemaInput](input)
+	w, err := workspaceClient()
 	if err != nil {
 		return err
 	}
 
-	cmdCtx, w, err := getWorkspaceClient(ctx)
+	if in.PolicyID != "" {
+		dsc.Logger.Debugf(MsgDelete, "ClusterPolicy", "policy_id="+in.PolicyID)
+		return w.ClusterPolicies.Delete(ctx, compute.DeletePolicy{PolicyId: in.PolicyID})
+	}
+
+	dsc.Logger.Debugf(MsgDelete, "ClusterPolicy", "name="+in.Name)
+	p, err := w.ClusterPolicies.GetByName(ctx, in.Name)
 	if err != nil {
-		return err
+		// Already absent — deleting a missing instance succeeds.
+		dsc.Logger.Infof(MsgNotFound, "ClusterPolicy", "name="+in.Name)
+		return nil
 	}
-
-	if schemaInput.PolicyID != "" {
-		dsc.Logger.Debugf(dsc.MsgDelete, "ClusterPolicy", "policy_id="+schemaInput.PolicyID)
-		return w.ClusterPolicies.Delete(cmdCtx, compute.DeletePolicy{PolicyId: schemaInput.PolicyID})
-	}
-
-	if schemaInput.Name != "" {
-		dsc.Logger.Debugf(dsc.MsgDelete, "ClusterPolicy", "name="+schemaInput.Name)
-		p, err := w.ClusterPolicies.GetByName(cmdCtx, schemaInput.Name)
-		if err != nil {
-			return dsc.NotFoundError("cluster policy", "name="+schemaInput.Name)
-		}
-		return w.ClusterPolicies.Delete(cmdCtx, compute.DeletePolicy{PolicyId: p.PolicyId})
-	}
-
-	return dsc.ValidateRequired(dsc.RequiredField{Name: "policy_id or name", Value: ""})
+	return w.ClusterPolicies.Delete(ctx, compute.DeletePolicy{PolicyId: p.PolicyId})
 }
 
-func (h *ClusterPolicyHandler) Export(ctx dsc.ResourceContext) ([]any, error) {
-	cmdCtx, w, err := getWorkspaceClient(ctx)
+func (h *ClusterPolicyHandler) Export(ctx context.Context, _ ClusterPolicyState) ([]ClusterPolicyState, error) {
+	w, err := workspaceClient()
 	if err != nil {
 		return nil, err
 	}
 
-	dsc.Logger.Debugf(dsc.MsgListAll, "ClusterPolicy")
-	policies, err := w.ClusterPolicies.ListAll(cmdCtx, compute.ListClusterPoliciesRequest{})
+	dsc.Logger.Debugf(MsgListAll, "ClusterPolicy")
+	policies, err := w.ClusterPolicies.ListAll(ctx, compute.ListClusterPoliciesRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list cluster policies: %w", err)
 	}
 
-	var allPolicies []any
+	var allPolicies []ClusterPolicyState
 	for i := range policies {
 		// Skip built-in default policies — they cannot be created or deleted.
 		if policies[i].IsDefault {

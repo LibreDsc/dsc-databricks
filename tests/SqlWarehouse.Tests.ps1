@@ -115,7 +115,7 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
             $result.afterState.id | Should -Not -BeNullOrEmpty
             $result.afterState.state | Should -Be 'RUNNING'
             $result.afterState.cluster_size | Should -Be $script:clusterSize
-            $result.changedProperties | Should -Contain '_exist'
+            $result.changedProperties | Should -Contain 'id'
             $script:testWarehouseId = $result.afterState.id
         }
 
