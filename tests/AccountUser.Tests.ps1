@@ -99,7 +99,7 @@ Describe 'Databricks AccountUser Resource' -Tag 'Databricks', 'AccountUser' -Ski
             $result.afterState._exist | Should -Be $true
             $result.afterState.user_name | Should -Be $script:testUserName
             $result.afterState.display_name | Should -Be $script:testDisplayName
-            $result.changedProperties | Should -Contain '_exist'
+            $result.changedProperties | Should -Contain 'user_name'
         }
 
         It 'should verify the created account user via get' {

@@ -98,7 +98,7 @@ Describe 'Databricks Repo Resource' -Tag 'Databricks', 'Repo' -Skip:(!$script:da
             $result.afterState._exist | Should -Be $true
             $result.afterState.path | Should -Be $script:testRepoPath
             $result.afterState.url | Should -Be $script:testRepoUrl
-            $result.changedProperties | Should -Contain '_exist'
+            $result.changedProperties | Should -Contain 'path'
         }
 
         It 'should verify the cloned repo via get' {

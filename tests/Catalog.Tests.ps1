@@ -97,7 +97,7 @@ Describe 'Databricks Catalog Resource' -Tag 'Databricks', 'Catalog' -Skip:(!$scr
             $result.afterState._exist | Should -Be $true
             $result.afterState.name | Should -Be $script:testCatalogName
             $result.afterState.comment | Should -Be 'Created by DSC test'
-            $result.changedProperties | Should -Contain '_exist'
+            $result.changedProperties | Should -Contain 'name'
         }
 
         It 'should verify the created catalog via get' {

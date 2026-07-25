@@ -123,7 +123,7 @@ Describe 'Databricks Cluster Resource' -Tag 'Databricks', 'Cluster' -Skip:(!$scr
             $result.afterState.cluster_name | Should -Be $script:testClusterName
             $result.afterState.cluster_id | Should -Not -BeNullOrEmpty
             $result.afterState.state | Should -Be 'RUNNING'
-            $result.changedProperties | Should -Contain '_exist'
+            $result.changedProperties | Should -Contain 'cluster_id'
             $script:testClusterId = $result.afterState.cluster_id
         }
 

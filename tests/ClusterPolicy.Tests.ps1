@@ -92,7 +92,7 @@ Describe 'Databricks ClusterPolicy Resource' -Tag 'Databricks', 'ClusterPolicy' 
             $result.afterState._exist | Should -Be $true
             $result.afterState.name | Should -Be $script:testPolicyName
             $result.afterState.policy_id | Should -Not -BeNullOrEmpty
-            $result.changedProperties | Should -Contain '_exist'
+            $result.changedProperties | Should -Contain 'policy_id'
             $script:testPolicyId = $result.afterState.policy_id
         }
 

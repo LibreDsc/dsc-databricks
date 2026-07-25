@@ -1,190 +1,135 @@
 package resources
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
-	"reflect"
 	"time"
 
-	"github.com/LibreDsc/dsc-databricks/internal/dsc"
+	dsc "github.com/LibreDsc/dsc-go-rdk"
 	"github.com/databricks/databricks-sdk-go/service/sql"
 )
 
-func init() {
-	dsc.RegisterResourceWithMetadata("LibreDsc.Databricks/SqlWarehouse", &SqlWarehouseHandler{}, sqlWarehouseMetadata())
-}
-
-// SQL Warehouse property descriptions from SDK documentation.
-var sqlWarehousePropertyDescriptions = dsc.PropertyDescriptions{
-	"id":                        "Unique identifier for the SQL warehouse. Computed on create.",
-	"name":                      "Logical name for the warehouse. Must be unique within an org and less than 100 characters.",
-	"cluster_size":              "Size of clusters allocated (2X-Small, X-Small, Small, Medium, Large, X-Large, 2X-Large, 3X-Large, 4X-Large, 5X-Large).",
-	"auto_stop_mins":            "Minutes of idle time before auto-stop. Must be 0 (disable) or >= 10. Defaults to 120.",
-	"min_num_clusters":          "Minimum available clusters. Must be > 0 and <= min(max_num_clusters, 30). Defaults to 1.",
-	"max_num_clusters":          "Maximum clusters for autoscaling. Must be >= min_num_clusters and <= 40.",
-	"enable_photon":             "Whether to use Photon-optimized clusters. Defaults to true.",
-	"enable_serverless_compute": "Whether to use serverless compute.",
-	"spot_instance_policy":      "Spot instance policy: COST_OPTIMIZED or RELIABILITY_OPTIMIZED.",
-	"warehouse_type":            "Warehouse type: PRO or CLASSIC. Set PRO with enable_serverless_compute for serverless.",
-	"channel":                   "Release channel name: CHANNEL_NAME_CURRENT, CHANNEL_NAME_PREVIEW, or CHANNEL_NAME_PREVIOUS.",
-	"state":                     "Current lifecycle state (STARTING, RUNNING, STOPPING, STOPPED, DELETING, DELETED). Read-only.",
-	"num_clusters":              "Current number of clusters running for the warehouse. Read-only.",
-}
-
-// SqlWarehouseSchemaInput defines the desired-state fields for the schema and
-// for unmarshaling input. id is computed on create; name is the human-readable
-// identifier — both carry omitempty so inputs supplying only one pass schema
-// validation. state and num_clusters are read-only.
-type SqlWarehouseSchemaInput struct {
-	ID                     string `json:"id,omitempty"`
-	Name                   string `json:"name,omitempty"`
-	ClusterSize            string `json:"cluster_size,omitempty"`
-	SpotInstancePolicy     string `json:"spot_instance_policy,omitempty"`
-	WarehouseType          string `json:"warehouse_type,omitempty"`
-	Channel                string `json:"channel,omitempty"`
-	AutoStopMins           int    `json:"auto_stop_mins,omitempty"`
-	MinNumClusters         int    `json:"min_num_clusters,omitempty"`
-	MaxNumClusters         int    `json:"max_num_clusters,omitempty"`
-	EnablePhoton           bool   `json:"enable_photon,omitempty"`
-	EnableServerlessCompute bool   `json:"enable_serverless_compute,omitempty"`
-}
-
-func sqlWarehouseMetadata() dsc.ResourceMetadata {
-	return dsc.BuildMetadata(dsc.MetadataConfig{
-		ResourceType:      "LibreDsc.Databricks/SqlWarehouse",
-		Description:       "Manage Databricks SQL warehouses.",
-		SchemaDescription: "Schema for managing Databricks SQL warehouses.",
-		ResourceName:      "sql_warehouse",
-		Tags:              []string{"databricks", "sqlwarehouse", "sql"},
-		Descriptions:      sqlWarehousePropertyDescriptions,
-		SchemaType:        reflect.TypeFor[SqlWarehouseSchemaInput](),
-		// state and num_clusters are server-computed and change over time;
-		// they are never part of desired state. All other configurable
-		// properties are plain value equality, so the DSC synthetic test is
-		// sufficient.
-		OmitTest: true,
-	})
-}
-
 // SqlWarehouseState represents the full state of a Databricks SQL warehouse.
+// id is computed on create; name is the human-readable identifier — both are
+// optional so inputs supplying only one of the two pass schema validation.
 type SqlWarehouseState struct {
-	ID                     string `json:"id,omitempty"`
-	Name                   string `json:"name,omitempty"`
-	ClusterSize            string `json:"cluster_size,omitempty"`
-	SpotInstancePolicy     string `json:"spot_instance_policy,omitempty"`
-	WarehouseType          string `json:"warehouse_type,omitempty"`
-	Channel                string `json:"channel,omitempty"`
-	State                  string `json:"state,omitempty"`
-	AutoStopMins           int    `json:"auto_stop_mins,omitempty"`
-	MinNumClusters         int    `json:"min_num_clusters,omitempty"`
-	MaxNumClusters         int    `json:"max_num_clusters,omitempty"`
-	NumClusters            int    `json:"num_clusters,omitempty"`
-	EnablePhoton           bool   `json:"enable_photon,omitempty"`
-	EnableServerlessCompute bool   `json:"enable_serverless_compute,omitempty"`
-	Exist                  bool   `json:"_exist"`
+	dsc.ExistProperty
+	ID                      string `json:"id,omitempty" description:"Unique identifier for the SQL warehouse. Computed on create."`
+	Name                    string `json:"name,omitempty" description:"Logical name for the warehouse. Must be unique within an org and less than 100 characters."`
+	ClusterSize             string `json:"cluster_size,omitempty" description:"Size of clusters allocated (2X-Small, X-Small, Small, Medium, Large, X-Large, 2X-Large, 3X-Large, 4X-Large, 5X-Large)."`
+	SpotInstancePolicy      string `json:"spot_instance_policy,omitempty" description:"Spot instance policy: COST_OPTIMIZED or RELIABILITY_OPTIMIZED."`
+	WarehouseType           string `json:"warehouse_type,omitempty" description:"Warehouse type: PRO or CLASSIC. Set PRO with enable_serverless_compute for serverless."`
+	Channel                 string `json:"channel,omitempty" description:"Release channel name: CHANNEL_NAME_CURRENT, CHANNEL_NAME_PREVIEW, or CHANNEL_NAME_PREVIOUS."`
+	State                   string `json:"state,omitempty" description:"Current lifecycle state (STARTING, RUNNING, STOPPING, STOPPED, DELETING, DELETED). (read-only)"`
+	AutoStopMins            int    `json:"auto_stop_mins,omitempty" description:"Minutes of idle time before auto-stop. Must be 0 (disable) or >= 10. Defaults to 120."`
+	MinNumClusters          int    `json:"min_num_clusters,omitempty" description:"Minimum available clusters. Must be > 0 and <= min(max_num_clusters, 30). Defaults to 1."`
+	MaxNumClusters          int    `json:"max_num_clusters,omitempty" description:"Maximum clusters for autoscaling. Must be >= min_num_clusters and <= 40."`
+	NumClusters             int    `json:"num_clusters,omitempty" description:"Current number of clusters running for the warehouse. (read-only)"`
+	EnablePhoton            bool   `json:"enable_photon,omitempty" description:"Whether to use Photon-optimized clusters. Defaults to true."`
+	EnableServerlessCompute bool   `json:"enable_serverless_compute,omitempty" description:"Whether to use serverless compute."`
 }
 
-// SqlWarehouseHandler handles SqlWarehouse resource operations.
+func sqlWarehouseConfig() dsc.ResourceConfig {
+	return dsc.ResourceConfig{
+		Type:        "LibreDsc.Databricks/SqlWarehouse",
+		Version:     "0.1.0",
+		Description: "Manage Databricks SQL warehouses.",
+		Tags:        []string{"databricks", "sqlwarehouse", "sql"},
+		SetReturn:   dsc.SetReturnStateAndDiff,
+		SchemaOptions: dsc.SchemaOptions{
+			SchemaDescription:         "Schema for managing Databricks SQL warehouses.",
+			AllowAdditionalProperties: true,
+		},
+	}
+}
+
+// SqlWarehouseHandler handles SqlWarehouse resource operations. state and
+// num_clusters are server-computed and change over time; they are never part
+// of desired state. All other configurable properties are plain value
+// equality, so no Testable is implemented — the DSC synthetic test suffices.
 type SqlWarehouseHandler struct{}
 
 func warehouseResponseToState(w *sql.GetWarehouseResponse) SqlWarehouseState {
 	s := SqlWarehouseState{
-		ID:                     w.Id,
-		Name:                   w.Name,
-		ClusterSize:            w.ClusterSize,
-		AutoStopMins:           w.AutoStopMins,
-		MinNumClusters:         w.MinNumClusters,
-		MaxNumClusters:         w.MaxNumClusters,
-		EnablePhoton:           w.EnablePhoton,
+		ID:                      w.Id,
+		Name:                    w.Name,
+		ClusterSize:             w.ClusterSize,
+		AutoStopMins:            w.AutoStopMins,
+		MinNumClusters:          w.MinNumClusters,
+		MaxNumClusters:          w.MaxNumClusters,
+		EnablePhoton:            w.EnablePhoton,
 		EnableServerlessCompute: w.EnableServerlessCompute,
-		SpotInstancePolicy:     string(w.SpotInstancePolicy),
-		WarehouseType:          string(w.WarehouseType),
-		State:                  string(w.State),
-		NumClusters:            w.NumClusters,
-		Exist:                  true,
+		SpotInstancePolicy:      string(w.SpotInstancePolicy),
+		WarehouseType:           string(w.WarehouseType),
+		State:                   string(w.State),
+		NumClusters:             w.NumClusters,
 	}
 	if w.Channel != nil {
 		s.Channel = string(w.Channel.Name)
 	}
+	s.SetExist(true)
 	return s
 }
 
 func endpointInfoToState(w *sql.EndpointInfo) SqlWarehouseState {
 	s := SqlWarehouseState{
-		ID:                     w.Id,
-		Name:                   w.Name,
-		ClusterSize:            w.ClusterSize,
-		AutoStopMins:           w.AutoStopMins,
-		MinNumClusters:         w.MinNumClusters,
-		MaxNumClusters:         w.MaxNumClusters,
-		EnablePhoton:           w.EnablePhoton,
+		ID:                      w.Id,
+		Name:                    w.Name,
+		ClusterSize:             w.ClusterSize,
+		AutoStopMins:            w.AutoStopMins,
+		MinNumClusters:          w.MinNumClusters,
+		MaxNumClusters:          w.MaxNumClusters,
+		EnablePhoton:            w.EnablePhoton,
 		EnableServerlessCompute: w.EnableServerlessCompute,
-		SpotInstancePolicy:     string(w.SpotInstancePolicy),
-		WarehouseType:          string(w.WarehouseType),
-		State:                  string(w.State),
-		NumClusters:            w.NumClusters,
-		Exist:                  true,
+		SpotInstancePolicy:      string(w.SpotInstancePolicy),
+		WarehouseType:           string(w.WarehouseType),
+		State:                   string(w.State),
+		NumClusters:             w.NumClusters,
 	}
 	if w.Channel != nil {
 		s.Channel = string(w.Channel.Name)
 	}
+	s.SetExist(true)
 	return s
 }
 
-func (h *SqlWarehouseHandler) getCurrentState(ctx dsc.ResourceContext, req *SqlWarehouseSchemaInput) (SqlWarehouseState, error) {
-	cmdCtx, w, err := getWorkspaceClient(ctx)
-	if err != nil {
-		return SqlWarehouseState{Exist: false}, err
+func (h *SqlWarehouseHandler) Get(ctx context.Context, in SqlWarehouseState) (SqlWarehouseState, error) {
+	if err := requireAtLeastOne("id or name", in.ID, in.Name); err != nil {
+		return in, err
 	}
 
-	if req.ID != "" {
-		dsc.Logger.Debugf(dsc.MsgLookup, "SqlWarehouse", "id="+req.ID)
-		resp, err := w.Warehouses.GetById(cmdCtx, req.ID)
+	w, err := workspaceClient()
+	if err != nil {
+		return in, err
+	}
+
+	if in.ID != "" {
+		dsc.Logger.Debugf(MsgLookup, "SqlWarehouse", "id="+in.ID)
+		resp, err := w.Warehouses.GetById(ctx, in.ID)
 		if err != nil {
-			dsc.Logger.Infof(dsc.MsgNotFound, "SqlWarehouse", "id="+req.ID)
-			return SqlWarehouseState{ID: req.ID, Exist: false}, nil
+			dsc.Logger.Infof(MsgNotFound, "SqlWarehouse", "id="+in.ID)
+			return dsc.NotFound(SqlWarehouseState{ID: in.ID}, "SqlWarehouse", "id="+in.ID)
 		}
 		return warehouseResponseToState(resp), nil
 	}
 
-	if req.Name != "" {
-		dsc.Logger.Debugf(dsc.MsgLookup, "SqlWarehouse", "name="+req.Name)
-		info, err := w.Warehouses.GetByName(cmdCtx, req.Name)
-		if err != nil {
-			dsc.Logger.Infof(dsc.MsgNotFound, "SqlWarehouse", "name="+req.Name)
-			return SqlWarehouseState{Name: req.Name, Exist: false}, nil
-		}
-		return endpointInfoToState(info), nil
+	dsc.Logger.Debugf(MsgLookup, "SqlWarehouse", "name="+in.Name)
+	info, err := w.Warehouses.GetByName(ctx, in.Name)
+	if err != nil {
+		dsc.Logger.Infof(MsgNotFound, "SqlWarehouse", "name="+in.Name)
+		return dsc.NotFound(SqlWarehouseState{Name: in.Name}, "SqlWarehouse", "name="+in.Name)
 	}
-
-	return SqlWarehouseState{Exist: false}, fmt.Errorf("id or name must be provided")
+	return endpointInfoToState(info), nil
 }
 
-func (h *SqlWarehouseHandler) Get(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.GetResult, error) {
-	req, err := dsc.UnmarshalInput[SqlWarehouseSchemaInput](input)
-	if err != nil {
-		return nil, err
-	}
-	if err := dsc.ValidateAtLeastOne("id or name", req.ID, req.Name); err != nil {
-		return nil, err
-	}
-
-	state, err := h.getCurrentState(ctx, &req)
-	if err != nil {
-		return nil, err
-	}
-
-	return &dsc.GetResult{ActualState: state}, nil
-}
-
-func buildCreateWarehouseRequest(input *SqlWarehouseSchemaInput) sql.CreateWarehouseRequest {
+func buildCreateWarehouseRequest(input *SqlWarehouseState) sql.CreateWarehouseRequest {
 	req := sql.CreateWarehouseRequest{
-		Name:                   input.Name,
-		ClusterSize:            input.ClusterSize,
-		AutoStopMins:           input.AutoStopMins,
-		MinNumClusters:         input.MinNumClusters,
-		MaxNumClusters:         input.MaxNumClusters,
-		EnablePhoton:           input.EnablePhoton,
+		Name:                    input.Name,
+		ClusterSize:             input.ClusterSize,
+		AutoStopMins:            input.AutoStopMins,
+		MinNumClusters:          input.MinNumClusters,
+		MaxNumClusters:          input.MaxNumClusters,
+		EnablePhoton:            input.EnablePhoton,
 		EnableServerlessCompute: input.EnableServerlessCompute,
 	}
 	if input.SpotInstancePolicy != "" {
@@ -203,15 +148,15 @@ func buildCreateWarehouseRequest(input *SqlWarehouseSchemaInput) sql.CreateWareh
 	return req
 }
 
-func buildEditWarehouseRequest(id string, input *SqlWarehouseSchemaInput, effectiveName string) sql.EditWarehouseRequest {
+func buildEditWarehouseRequest(id string, input *SqlWarehouseState, effectiveName string) sql.EditWarehouseRequest {
 	req := sql.EditWarehouseRequest{
-		Id:                     id,
-		Name:                   effectiveName,
-		ClusterSize:            input.ClusterSize,
-		AutoStopMins:           input.AutoStopMins,
-		MinNumClusters:         input.MinNumClusters,
-		MaxNumClusters:         input.MaxNumClusters,
-		EnablePhoton:           input.EnablePhoton,
+		Id:                      id,
+		Name:                    effectiveName,
+		ClusterSize:             input.ClusterSize,
+		AutoStopMins:            input.AutoStopMins,
+		MinNumClusters:          input.MinNumClusters,
+		MaxNumClusters:          input.MaxNumClusters,
+		EnablePhoton:            input.EnablePhoton,
 		EnableServerlessCompute: input.EnableServerlessCompute,
 	}
 	if input.SpotInstancePolicy != "" {
@@ -229,143 +174,96 @@ func buildEditWarehouseRequest(id string, input *SqlWarehouseSchemaInput, effect
 	return req
 }
 
-func (h *SqlWarehouseHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.SetResult, error) {
-	schemaInput, err := dsc.UnmarshalInput[SqlWarehouseSchemaInput](input)
-	if err != nil {
-		return nil, err
-	}
-	beforeState, _ := h.getCurrentState(ctx, &schemaInput)
-
-	cmdCtx, w, err := getWorkspaceClient(ctx)
-	if err != nil {
-		return nil, err
+func (h *SqlWarehouseHandler) Set(ctx context.Context, desired SqlWarehouseState) (SqlWarehouseState, error) {
+	if err := requireAtLeastOne("id or name", desired.ID, desired.Name); err != nil {
+		return desired, err
 	}
 
-	var afterState SqlWarehouseState
+	current, err := h.Get(ctx, desired)
+	if err != nil {
+		return desired, err
+	}
 
-	if beforeState.Exist {
-		dsc.Logger.Infof(dsc.MsgUpdate, "SqlWarehouse", "id="+beforeState.ID)
+	w, err := workspaceClient()
+	if err != nil {
+		return desired, err
+	}
+
+	if current.ShouldExist() {
+		dsc.Logger.Infof(MsgUpdate, "SqlWarehouse", "id="+current.ID)
 		// Warehouse exists — edit it.
-		effectiveName := schemaInput.Name
+		effectiveName := desired.Name
 		if effectiveName == "" {
-			effectiveName = beforeState.Name
+			effectiveName = current.Name
 		}
 
-		editReq := buildEditWarehouseRequest(beforeState.ID, &schemaInput, effectiveName)
+		editReq := buildEditWarehouseRequest(current.ID, &desired, effectiveName)
 
 		// If the warehouse is STOPPED, Edit applies the config for next start
 		// without restarting. If RUNNING, wait for the restart to complete.
-		wait, err := w.Warehouses.Edit(cmdCtx, editReq)
+		wait, err := w.Warehouses.Edit(ctx, editReq)
 		if err != nil {
-			return nil, fmt.Errorf("failed to update SQL warehouse: %w", err)
+			return desired, fmt.Errorf("failed to update SQL warehouse: %w", err)
 		}
-		if beforeState.State != "STOPPED" {
+		if current.State != "STOPPED" {
 			if _, err := wait.Get(); err != nil {
-				return nil, fmt.Errorf("failed waiting for SQL warehouse restart: %w", err)
+				return desired, fmt.Errorf("failed waiting for SQL warehouse restart: %w", err)
 			}
 		}
 
 		// Re-fetch by ID (direct GET — strongly consistent).
-		updated, err := w.Warehouses.GetById(cmdCtx, beforeState.ID)
+		updated, err := w.Warehouses.GetById(ctx, current.ID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to retrieve updated SQL warehouse: %w", err)
+			return desired, fmt.Errorf("failed to retrieve updated SQL warehouse: %w", err)
 		}
-		afterState = warehouseResponseToState(updated)
-	} else {
-		dsc.Logger.Infof(dsc.MsgCreate, "SqlWarehouse", "name="+schemaInput.Name)
-		// Warehouse does not exist — create it.
-		if err := dsc.ValidateRequired(
-			dsc.RequiredField{Name: "name", Value: schemaInput.Name},
-			dsc.RequiredField{Name: "cluster_size", Value: schemaInput.ClusterSize},
-		); err != nil {
-			return nil, err
-		}
-
-		createReq := buildCreateWarehouseRequest(&schemaInput)
-		wait, err := w.Warehouses.Create(cmdCtx, createReq)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create SQL warehouse: %w", err)
-		}
-		created, err := wait.Get()
-		if err != nil {
-			return nil, fmt.Errorf("failed waiting for SQL warehouse to start: %w", err)
-		}
-		afterState = warehouseResponseToState(created)
+		return warehouseResponseToState(updated), nil
 	}
 
-	changedProps := dsc.CompareAllStates(beforeState, afterState)
+	dsc.Logger.Infof(MsgCreate, "SqlWarehouse", "name="+desired.Name)
+	// Warehouse does not exist — create it.
+	if err := requireFields(
+		field{"name", desired.Name},
+		field{"cluster_size", desired.ClusterSize},
+	); err != nil {
+		return desired, err
+	}
 
-	return &dsc.SetResult{
-		BeforeState:       beforeState,
-		AfterState:        afterState,
-		ChangedProperties: changedProps,
-	}, nil
+	createReq := buildCreateWarehouseRequest(&desired)
+	wait, err := w.Warehouses.Create(ctx, createReq)
+	if err != nil {
+		return desired, fmt.Errorf("failed to create SQL warehouse: %w", err)
+	}
+	created, err := wait.Get()
+	if err != nil {
+		return desired, fmt.Errorf("failed waiting for SQL warehouse to start: %w", err)
+	}
+	return warehouseResponseToState(created), nil
 }
 
-func (h *SqlWarehouseHandler) Test(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.TestResult, error) {
-	schemaInput, err := dsc.UnmarshalInput[SqlWarehouseSchemaInput](input)
-	if err != nil {
-		return nil, err
+func (h *SqlWarehouseHandler) Delete(ctx context.Context, in SqlWarehouseState) error {
+	if err := requireAtLeastOne("id or name", in.ID, in.Name); err != nil {
+		return err
 	}
 
-	actualState, err := h.getCurrentState(ctx, &schemaInput)
-	if err != nil {
-		return nil, err
-	}
-
-	desiredState := SqlWarehouseState{
-		ID:                     schemaInput.ID,
-		Name:                   schemaInput.Name,
-		ClusterSize:            schemaInput.ClusterSize,
-		AutoStopMins:           schemaInput.AutoStopMins,
-		MinNumClusters:         schemaInput.MinNumClusters,
-		MaxNumClusters:         schemaInput.MaxNumClusters,
-		EnablePhoton:           schemaInput.EnablePhoton,
-		EnableServerlessCompute: schemaInput.EnableServerlessCompute,
-		SpotInstancePolicy:     schemaInput.SpotInstancePolicy,
-		WarehouseType:          schemaInput.WarehouseType,
-		Channel:                schemaInput.Channel,
-		Exist:                  true,
-	}
-
-	differing := dsc.CompareStates(desiredState, actualState)
-	inDesiredState := len(differing) == 0
-
-	return &dsc.TestResult{
-		DesiredState:        desiredState,
-		ActualState:         actualState,
-		InDesiredState:      inDesiredState,
-		DifferingProperties: differing,
-	}, nil
-}
-
-func (h *SqlWarehouseHandler) Delete(ctx dsc.ResourceContext, input json.RawMessage) error {
-	schemaInput, err := dsc.UnmarshalInput[SqlWarehouseSchemaInput](input)
+	w, err := workspaceClient()
 	if err != nil {
 		return err
 	}
 
-	cmdCtx, w, err := getWorkspaceClient(ctx)
-	if err != nil {
-		return err
-	}
-
-	warehouseID := schemaInput.ID
-	if warehouseID == "" && schemaInput.Name != "" {
-		info, lookupErr := w.Warehouses.GetByName(cmdCtx, schemaInput.Name)
+	warehouseID := in.ID
+	if warehouseID == "" {
+		info, lookupErr := w.Warehouses.GetByName(ctx, in.Name)
 		if lookupErr != nil {
-			return dsc.NotFoundError("SQL warehouse", "name="+schemaInput.Name)
+			// Already absent — deleting a missing instance succeeds.
+			dsc.Logger.Infof(MsgNotFound, "SqlWarehouse", "name="+in.Name)
+			return nil
 		}
 		warehouseID = info.Id
 	}
 
-	if warehouseID == "" {
-		return dsc.ValidateRequired(dsc.RequiredField{Name: "id or name", Value: ""})
-	}
-
-	dsc.Logger.Debugf(dsc.MsgDelete, "SqlWarehouse", "id="+warehouseID)
+	dsc.Logger.Debugf(MsgDelete, "SqlWarehouse", "id="+warehouseID)
 	// Stop the warehouse first if it is running, then delete it.
-	resp, err := w.Warehouses.GetById(cmdCtx, warehouseID)
+	resp, err := w.Warehouses.GetById(ctx, warehouseID)
 	if err != nil {
 		// Warehouse already gone — nothing to do.
 		return nil
@@ -373,7 +271,7 @@ func (h *SqlWarehouseHandler) Delete(ctx dsc.ResourceContext, input json.RawMess
 
 	switch resp.State {
 	case sql.StateRunning, sql.StateStarting:
-		wait, err := w.Warehouses.Stop(cmdCtx, sql.StopRequest{Id: warehouseID})
+		wait, err := w.Warehouses.Stop(ctx, sql.StopRequest{Id: warehouseID})
 		if err != nil {
 			return fmt.Errorf("failed to stop SQL warehouse: %w", err)
 		}
@@ -381,28 +279,28 @@ func (h *SqlWarehouseHandler) Delete(ctx dsc.ResourceContext, input json.RawMess
 			return fmt.Errorf("failed waiting for SQL warehouse to stop: %w", err)
 		}
 	case sql.StateStopping:
-		_, err = w.Warehouses.WaitGetWarehouseStopped(cmdCtx, warehouseID, 20*time.Minute, nil)
+		_, err = w.Warehouses.WaitGetWarehouseStopped(ctx, warehouseID, 20*time.Minute, nil)
 		if err != nil {
 			return fmt.Errorf("failed waiting for SQL warehouse to stop: %w", err)
 		}
 	}
 
-	return w.Warehouses.DeleteById(cmdCtx, warehouseID)
+	return w.Warehouses.DeleteById(ctx, warehouseID)
 }
 
-func (h *SqlWarehouseHandler) Export(ctx dsc.ResourceContext) ([]any, error) {
-	cmdCtx, w, err := getWorkspaceClient(ctx)
+func (h *SqlWarehouseHandler) Export(ctx context.Context, _ SqlWarehouseState) ([]SqlWarehouseState, error) {
+	w, err := workspaceClient()
 	if err != nil {
 		return nil, err
 	}
 
-	dsc.Logger.Debugf(dsc.MsgListAll, "SqlWarehouse")
-	warehouses, err := w.Warehouses.ListAll(cmdCtx, sql.ListWarehousesRequest{})
+	dsc.Logger.Debugf(MsgListAll, "SqlWarehouse")
+	warehouses, err := w.Warehouses.ListAll(ctx, sql.ListWarehousesRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list SQL warehouses: %w", err)
 	}
 
-	var all []any
+	var all []SqlWarehouseState
 	for i := range warehouses {
 		all = append(all, endpointInfoToState(&warehouses[i]))
 	}

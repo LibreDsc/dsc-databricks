@@ -1,273 +1,193 @@
 package resources
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
-	"reflect"
 
-	"github.com/LibreDsc/dsc-databricks/internal/dsc"
+	dsc "github.com/LibreDsc/dsc-go-rdk"
 	"github.com/databricks/databricks-sdk-go/service/catalog"
 )
 
-func init() {
-	dsc.RegisterResourceWithMetadata("LibreDsc.Databricks/Catalog", &CatalogHandler{}, catalogMetadata())
-}
-
-// Catalog property descriptions from SDK documentation.
-var catalogPropertyDescriptions = dsc.PropertyDescriptions{
-	"name":                            "Name of the catalog. This is the unique identifier used for lookup.",
-	"comment":                         "User-provided free-form text description.",
-	"owner":                           "Username of the current owner of the catalog.",
-	"isolation_mode":                  "Whether the catalog is accessible from all workspaces or a specific set. Valid values: ISOLATED, OPEN.",
-	"storage_root":                    "Storage root URL for managed tables within the catalog.",
-	"storage_location":                "Storage location URL (full path) for managed tables within the catalog. Computed by the server.",
-	"connection_name":                 "The name of the connection to an external data source.",
-	"provider_name":                   "The name of the delta sharing provider.",
-	"share_name":                      "The name of the share under the share provider.",
-	"enable_predictive_optimization":  "Whether predictive optimization should be enabled. Valid values: DISABLE, ENABLE, INHERIT.",
-	"catalog_type":                    "Type of the catalog. Computed by the server.",
-	"metastore_id":                    "Unique identifier of the parent metastore. Computed by the server.",
-	"properties":                      "A map of key-value properties attached to the catalog.",
-	"options":                         "A map of key-value options attached to the catalog.",
-}
-
-// CatalogSchemaInput defines the desired-state fields for the schema
-// and for unmarshaling input. name is the primary identifier.
-type CatalogSchemaInput struct {
-	Properties                  map[string]string `json:"properties,omitempty"`
-	Options                     map[string]string `json:"options,omitempty"`
-	Name                        string            `json:"name"`
-	Comment                     string            `json:"comment,omitempty"`
-	Owner                       string            `json:"owner,omitempty"`
-	IsolationMode               string            `json:"isolation_mode,omitempty"`
-	StorageRoot                 string            `json:"storage_root,omitempty"`
-	ConnectionName              string            `json:"connection_name,omitempty"`
-	ProviderName                string            `json:"provider_name,omitempty"`
-	ShareName                   string            `json:"share_name,omitempty"`
-	EnablePredictiveOptimization string           `json:"enable_predictive_optimization,omitempty"`
-}
-
-func catalogMetadata() dsc.ResourceMetadata {
-	return dsc.BuildMetadata(dsc.MetadataConfig{
-		ResourceType:      "LibreDsc.Databricks/Catalog",
-		Description:       "Manage Unity Catalog catalogs in a Databricks workspace.",
-		SchemaDescription: "Schema for managing Unity Catalog catalogs.",
-		ResourceName:      "catalog",
-		Tags:              []string{"databricks", "catalog", "unitycatalog"},
-		Descriptions:      catalogPropertyDescriptions,
-		SchemaType:        reflect.TypeFor[CatalogSchemaInput](),
-	})
-}
-
 // CatalogState represents the full state of a Unity Catalog catalog.
 type CatalogState struct {
-	Properties                  map[string]string `json:"properties,omitempty"`
-	Options                     map[string]string `json:"options,omitempty"`
-	Name                        string            `json:"name"`
-	Comment                     string            `json:"comment,omitempty"`
-	Owner                       string            `json:"owner,omitempty"`
-	IsolationMode               string            `json:"isolation_mode,omitempty"`
-	StorageRoot                 string            `json:"storage_root,omitempty"`
-	StorageLocation             string            `json:"storage_location,omitempty"`
-	ConnectionName              string            `json:"connection_name,omitempty"`
-	ProviderName                string            `json:"provider_name,omitempty"`
-	ShareName                   string            `json:"share_name,omitempty"`
-	EnablePredictiveOptimization string           `json:"enable_predictive_optimization,omitempty"`
-	CatalogType                 string            `json:"catalog_type,omitempty"`
-	MetastoreID                 string            `json:"metastore_id,omitempty"`
-	Exist                       bool              `json:"_exist"`
+	dsc.ExistProperty
+	Properties                   map[string]string `json:"properties,omitempty" description:"A map of key-value properties attached to the catalog."`
+	Options                      map[string]string `json:"options,omitempty" description:"A map of key-value options attached to the catalog."`
+	Name                         string            `json:"name" description:"Name of the catalog. This is the unique identifier used for lookup."`
+	Comment                      string            `json:"comment,omitempty" description:"User-provided free-form text description."`
+	Owner                        string            `json:"owner,omitempty" description:"Username of the current owner of the catalog."`
+	IsolationMode                string            `json:"isolation_mode,omitempty" description:"Whether the catalog is accessible from all workspaces or a specific set. Valid values: ISOLATED, OPEN." enum:"ISOLATED,OPEN"`
+	StorageRoot                  string            `json:"storage_root,omitempty" description:"Storage root URL for managed tables within the catalog."`
+	StorageLocation              string            `json:"storage_location,omitempty" description:"Storage location URL (full path) for managed tables within the catalog. (read-only)"`
+	ConnectionName               string            `json:"connection_name,omitempty" description:"The name of the connection to an external data source."`
+	ProviderName                 string            `json:"provider_name,omitempty" description:"The name of the delta sharing provider."`
+	ShareName                    string            `json:"share_name,omitempty" description:"The name of the share under the share provider."`
+	EnablePredictiveOptimization string            `json:"enable_predictive_optimization,omitempty" description:"Whether predictive optimization should be enabled. Valid values: DISABLE, ENABLE, INHERIT." enum:"DISABLE,ENABLE,INHERIT"`
+	CatalogType                  string            `json:"catalog_type,omitempty" description:"Type of the catalog. (read-only)"`
+	MetastoreID                  string            `json:"metastore_id,omitempty" description:"Unique identifier of the parent metastore. (read-only)"`
+}
+
+func catalogConfig() dsc.ResourceConfig {
+	return dsc.ResourceConfig{
+		Type:        "LibreDsc.Databricks/Catalog",
+		Version:     "0.1.0",
+		Description: "Manage Unity Catalog catalogs in a Databricks workspace.",
+		Tags:        []string{"databricks", "catalog", "unitycatalog"},
+		SetReturn:   dsc.SetReturnStateAndDiff,
+		SchemaOptions: dsc.SchemaOptions{
+			SchemaDescription:         "Schema for managing Unity Catalog catalogs.",
+			AllowAdditionalProperties: true,
+		},
+	}
 }
 
 // CatalogHandler handles Catalog resource operations.
 type CatalogHandler struct{}
 
 func catalogInfoToState(c *catalog.CatalogInfo) CatalogState {
-	return CatalogState{
-		Name:                        c.Name,
-		Comment:                     c.Comment,
-		Owner:                       c.Owner,
-		IsolationMode:               string(c.IsolationMode),
-		StorageRoot:                 c.StorageRoot,
-		StorageLocation:             c.StorageLocation,
-		ConnectionName:              c.ConnectionName,
-		ProviderName:                c.ProviderName,
-		ShareName:                   c.ShareName,
+	state := CatalogState{
+		Name:                         c.Name,
+		Comment:                      c.Comment,
+		Owner:                        c.Owner,
+		IsolationMode:                string(c.IsolationMode),
+		StorageRoot:                  c.StorageRoot,
+		StorageLocation:              c.StorageLocation,
+		ConnectionName:               c.ConnectionName,
+		ProviderName:                 c.ProviderName,
+		ShareName:                    c.ShareName,
 		EnablePredictiveOptimization: string(c.EnablePredictiveOptimization),
-		CatalogType:                 string(c.CatalogType),
-		MetastoreID:                 c.MetastoreId,
-		Properties:                  c.Properties,
-		Options:                     c.Options,
-		Exist:                       true,
+		CatalogType:                  string(c.CatalogType),
+		MetastoreID:                  c.MetastoreId,
+		Properties:                   c.Properties,
+		Options:                      c.Options,
 	}
+	state.SetExist(true)
+	return state
 }
 
-func (h *CatalogHandler) getCurrentState(ctx dsc.ResourceContext, name string) (CatalogState, error) {
-	cmdCtx, w, err := getWorkspaceClient(ctx)
-	if err != nil {
-		return CatalogState{Exist: false}, err
+func (h *CatalogHandler) Get(ctx context.Context, in CatalogState) (CatalogState, error) {
+	if err := requireFields(field{"name", in.Name}); err != nil {
+		return in, err
 	}
 
-	dsc.Logger.Debugf(dsc.MsgLookup, "Catalog", "name="+name)
-	c, err := w.Catalogs.GetByName(cmdCtx, name)
+	w, err := workspaceClient()
 	if err != nil {
-		dsc.Logger.Infof(dsc.MsgNotFound, "Catalog", "name="+name)
-		return CatalogState{Name: name, Exist: false}, nil
+		return in, err
+	}
+
+	dsc.Logger.Debugf(MsgLookup, "Catalog", "name="+in.Name)
+	c, err := w.Catalogs.GetByName(ctx, in.Name)
+	if err != nil {
+		dsc.Logger.Infof(MsgNotFound, "Catalog", "name="+in.Name)
+		return dsc.NotFound(CatalogState{Name: in.Name}, "Catalog", "name="+in.Name)
 	}
 
 	return catalogInfoToState(c), nil
 }
 
-func (h *CatalogHandler) Get(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.GetResult, error) {
-	req, err := dsc.UnmarshalInput[CatalogSchemaInput](input)
+func (h *CatalogHandler) Set(ctx context.Context, desired CatalogState) (CatalogState, error) {
+	if err := requireFields(field{"name", desired.Name}); err != nil {
+		return desired, err
+	}
+
+	current, err := h.Get(ctx, desired)
 	if err != nil {
-		return nil, err
-	}
-	if err := dsc.ValidateRequired(dsc.RequiredField{Name: "name", Value: req.Name}); err != nil {
-		return nil, err
+		return desired, err
 	}
 
-	state, err := h.getCurrentState(ctx, req.Name)
+	w, err := workspaceClient()
 	if err != nil {
-		return nil, err
+		return desired, err
 	}
 
-	return &dsc.GetResult{ActualState: state}, nil
-}
-
-func (h *CatalogHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.SetResult, error) {
-	req, err := dsc.UnmarshalInput[CatalogSchemaInput](input)
-	if err != nil {
-		return nil, err
-	}
-	if err := dsc.ValidateRequired(dsc.RequiredField{Name: "name", Value: req.Name}); err != nil {
-		return nil, err
-	}
-
-	beforeState, _ := h.getCurrentState(ctx, req.Name)
-
-	cmdCtx, w, err := getWorkspaceClient(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var afterCatalog *catalog.CatalogInfo
-
-	if beforeState.Exist {
-		dsc.Logger.Infof(dsc.MsgUpdate, "Catalog", "name="+req.Name)
-		// Catalog exists — update it.
-		updated, err := w.Catalogs.Update(cmdCtx, catalog.UpdateCatalog{
-			Name:                        req.Name,
-			Comment:                     req.Comment,
-			Owner:                       req.Owner,
-			IsolationMode:               catalog.CatalogIsolationMode(req.IsolationMode),
-			EnablePredictiveOptimization: catalog.EnablePredictiveOptimization(req.EnablePredictiveOptimization),
-			Properties:                  req.Properties,
-			Options:                     req.Options,
+	if current.ShouldExist() {
+		dsc.Logger.Infof(MsgUpdate, "Catalog", "name="+desired.Name)
+		updated, err := w.Catalogs.Update(ctx, catalog.UpdateCatalog{
+			Name:                         desired.Name,
+			Comment:                      desired.Comment,
+			Owner:                        desired.Owner,
+			IsolationMode:                catalog.CatalogIsolationMode(desired.IsolationMode),
+			EnablePredictiveOptimization: catalog.EnablePredictiveOptimization(desired.EnablePredictiveOptimization),
+			Properties:                   desired.Properties,
+			Options:                      desired.Options,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("failed to update catalog: %w", err)
+			return desired, fmt.Errorf("failed to update catalog: %w", err)
 		}
-		afterCatalog = updated
-	} else {
-		dsc.Logger.Infof(dsc.MsgCreate, "Catalog", "name="+req.Name)
-		// Catalog does not exist — create it.
-		created, err := w.Catalogs.Create(cmdCtx, catalog.CreateCatalog{
-			Name:           req.Name,
-			Comment:        req.Comment,
-			StorageRoot:    req.StorageRoot,
-			ConnectionName: req.ConnectionName,
-			ProviderName:   req.ProviderName,
-			ShareName:      req.ShareName,
-			Properties:     req.Properties,
-			Options:        req.Options,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to create catalog: %w", err)
-		}
-		afterCatalog = created
+		return catalogInfoToState(updated), nil
 	}
 
-	afterState := catalogInfoToState(afterCatalog)
-	changedProps := dsc.CompareAllStates(beforeState, afterState)
-
-	return &dsc.SetResult{
-		BeforeState:       beforeState,
-		AfterState:        afterState,
-		ChangedProperties: changedProps,
-	}, nil
+	dsc.Logger.Infof(MsgCreate, "Catalog", "name="+desired.Name)
+	created, err := w.Catalogs.Create(ctx, catalog.CreateCatalog{
+		Name:           desired.Name,
+		Comment:        desired.Comment,
+		StorageRoot:    desired.StorageRoot,
+		ConnectionName: desired.ConnectionName,
+		ProviderName:   desired.ProviderName,
+		ShareName:      desired.ShareName,
+		Properties:     desired.Properties,
+		Options:        desired.Options,
+	})
+	if err != nil {
+		return desired, fmt.Errorf("failed to create catalog: %w", err)
+	}
+	return catalogInfoToState(created), nil
 }
 
-func (h *CatalogHandler) Test(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.TestResult, error) {
-	req, err := dsc.UnmarshalInput[CatalogSchemaInput](input)
+func (h *CatalogHandler) Test(ctx context.Context, desired CatalogState) (dsc.TestResult[CatalogState], error) {
+	actual, err := h.Get(ctx, desired)
 	if err != nil {
-		return nil, err
+		return dsc.TestResult[CatalogState]{}, err
 	}
 
-	actualState, err := h.getCurrentState(ctx, req.Name)
-	if err != nil {
-		return nil, err
+	result := dsc.TestResult[CatalogState]{ActualState: actual}
+	if !actual.ShouldExist() {
+		// CompareStates skips canonical properties; report existence drift explicitly.
+		result.DifferingProperties = []string{"_exist"}
+		return result, nil
 	}
-
-	desiredState := CatalogState{
-		Name:                        req.Name,
-		Comment:                     req.Comment,
-		Owner:                       req.Owner,
-		IsolationMode:               req.IsolationMode,
-		StorageRoot:                 req.StorageRoot,
-		ConnectionName:              req.ConnectionName,
-		ProviderName:                req.ProviderName,
-		ShareName:                   req.ShareName,
-		EnablePredictiveOptimization: req.EnablePredictiveOptimization,
-		Properties:                  req.Properties,
-		Options:                     req.Options,
-		Exist:                       true,
-	}
-
-	differing := dsc.CompareStates(desiredState, actualState)
-	inDesiredState := len(differing) == 0
-
-	return &dsc.TestResult{
-		DesiredState:        desiredState,
-		ActualState:         actualState,
-		InDesiredState:      inDesiredState,
-		DifferingProperties: differing,
-	}, nil
+	result.DifferingProperties = dsc.CompareStates(desired, actual)
+	return result, nil
 }
 
-func (h *CatalogHandler) Delete(ctx dsc.ResourceContext, input json.RawMessage) error {
-	req, err := dsc.UnmarshalInput[CatalogSchemaInput](input)
-	if err != nil {
-		return err
-	}
-	if err := dsc.ValidateRequired(dsc.RequiredField{Name: "name", Value: req.Name}); err != nil {
+func (h *CatalogHandler) Delete(ctx context.Context, in CatalogState) error {
+	if err := requireFields(field{"name", in.Name}); err != nil {
 		return err
 	}
 
-	cmdCtx, w, err := getWorkspaceClient(ctx)
+	current, err := h.Get(ctx, in)
+	if err != nil {
+		return err
+	}
+	if !current.ShouldExist() {
+		return nil
+	}
+
+	w, err := workspaceClient()
 	if err != nil {
 		return err
 	}
 
-	dsc.Logger.Debugf(dsc.MsgDelete, "Catalog", "name="+req.Name)
-	return w.Catalogs.Delete(cmdCtx, catalog.DeleteCatalogRequest{
-		Name:  req.Name,
+	dsc.Logger.Debugf(MsgDelete, "Catalog", "name="+in.Name)
+	return w.Catalogs.Delete(ctx, catalog.DeleteCatalogRequest{
+		Name:  in.Name,
 		Force: true,
 	})
 }
 
-func (h *CatalogHandler) Export(ctx dsc.ResourceContext) ([]any, error) {
-	cmdCtx, w, err := getWorkspaceClient(ctx)
+func (h *CatalogHandler) Export(ctx context.Context, _ CatalogState) ([]CatalogState, error) {
+	w, err := workspaceClient()
 	if err != nil {
 		return nil, err
 	}
 
-	dsc.Logger.Debugf(dsc.MsgListAll, "Catalog")
-	catalogs, err := w.Catalogs.ListAll(cmdCtx, catalog.ListCatalogsRequest{})
+	dsc.Logger.Debugf(MsgListAll, "Catalog")
+	catalogs, err := w.Catalogs.ListAll(ctx, catalog.ListCatalogsRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list catalogs: %w", err)
 	}
 
-	var all []any
+	var all []CatalogState
 	for i := range catalogs {
 		all = append(all, catalogInfoToState(&catalogs[i]))
 	}

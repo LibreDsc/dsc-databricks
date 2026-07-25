@@ -2,53 +2,25 @@ package resources
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
-	"reflect"
 
-	"github.com/LibreDsc/dsc-databricks/internal/dsc"
-	"github.com/databricks/databricks-sdk-go"
+	dsc "github.com/LibreDsc/dsc-go-rdk"
 	"github.com/databricks/databricks-sdk-go/service/iam"
 )
 
-func init() {
-	dsc.RegisterResourceWithMetadata("LibreDsc.Databricks/User", &UserHandler{}, userMetadata())
+// UserState represents the state of a Databricks workspace user.
+type UserState struct {
+	dsc.ExistProperty
+	ID           string             `json:"id,omitempty" description:"Databricks user ID. This is the unique identifier for the user."`
+	UserName     string             `json:"user_name" description:"Email address of the Databricks user. This is used as the primary identifier."`
+	DisplayName  string             `json:"display_name,omitempty" description:"String that represents a concatenation of given and family names."`
+	Emails       []UserComplexValue `json:"emails,omitempty" description:"All the emails associated with the Databricks user."`
+	Entitlements []UserComplexValue `json:"entitlements,omitempty" description:"Entitlements assigned to the user."`
+	Roles        []UserComplexValue `json:"roles,omitempty" description:"Corresponds to AWS instance profile/arn role."`
+	Active       bool               `json:"active" dsc:"optional" description:"If this user is active."`
 }
 
-// User property descriptions from SDK documentation.
-var userPropertyDescriptions = dsc.PropertyDescriptions{
-	"id":           "Databricks user ID. This is the unique identifier for the user.",
-	"user_name":    "Email address of the Databricks user. This is used as the primary identifier.",
-	"display_name": "String that represents a concatenation of given and family names.",
-	"active":       "If this user is active.",
-	"external_id":  "External ID is reserved for future use.",
-	"emails":       "All the emails associated with the Databricks user.",
-	"entitlements": "Entitlements assigned to the user.",
-	"groups":       "Groups the user belongs to.",
-	"roles":        "Corresponds to AWS instance profile/arn role.",
-	"name":         "The name of the user (given name and family name).",
-}
-
-// UserComplexValue represents a SCIM complex value (used for emails, entitlements, roles).
-type UserComplexValue struct {
-	Value   string `json:"value"`
-	Display string `json:"display,omitempty"`
-	Type    string `json:"type,omitempty"`
-	Primary bool   `json:"primary,omitempty"`
-}
-
-type UserSchemaInput struct {
-	ID           string             `json:"id,omitempty"`
-	UserName     string             `json:"user_name"`
-	DisplayName  string             `json:"display_name,omitempty"`
-	Emails       []UserComplexValue `json:"emails,omitempty"`
-	Entitlements []UserComplexValue `json:"entitlements,omitempty"`
-	Roles        []UserComplexValue `json:"roles,omitempty"`
-	Active       bool               `json:"active,omitempty"`
-}
-
-func (u UserSchemaInput) toCreateRequest() iam.CreateUserRequest {
+func (u *UserState) toCreateRequest() iam.CreateUserRequest {
 	return iam.CreateUserRequest{
 		Id:           u.ID,
 		UserName:     u.UserName,
@@ -60,17 +32,19 @@ func (u UserSchemaInput) toCreateRequest() iam.CreateUserRequest {
 	}
 }
 
-func userMetadata() dsc.ResourceMetadata {
-	return dsc.BuildMetadata(dsc.MetadataConfig{
-		ResourceType:      "LibreDsc.Databricks/User",
-		Description:       "Manage Databricks workspace users",
-		SchemaDescription: "Schema for managing Databricks workspace users.",
-		ResourceName:      "user",
-		Tags:              []string{"databricks", "user", "iam", "workspace"},
-		Descriptions:      userPropertyDescriptions,
-		SchemaType:        reflect.TypeFor[UserSchemaInput](),
-		SchemaOverrides:   userSchemaOverrides,
-	})
+func userConfig() dsc.ResourceConfig {
+	return dsc.ResourceConfig{
+		Type:        "LibreDsc.Databricks/User",
+		Version:     "0.1.0",
+		Description: "Manage Databricks workspace users",
+		Tags:        []string{"databricks", "user", "iam", "workspace"},
+		SetReturn:   dsc.SetReturnStateAndDiff,
+		SchemaOptions: dsc.SchemaOptions{
+			SchemaDescription:         "Schema for managing Databricks workspace users.",
+			AllowAdditionalProperties: true,
+			Overrides:                 userSchemaOverrides,
+		},
+	}
 }
 
 // userSchemaOverrides adds enum constraints to the generated schema.
@@ -91,227 +65,155 @@ func userSchemaOverrides(schema map[string]any) {
 	setNestedEnum(props, "entitlements", "value", entitlementEnum)
 }
 
-// setNestedEnum sets an enum constraint on a value property inside an array-of-objects schema property.
-func setNestedEnum(props map[string]any, arrayProp, fieldName string, enumValues []string) {
-	arraySchema, ok := props[arrayProp].(map[string]any)
-	if !ok {
-		return
-	}
-	items, ok := arraySchema["items"].(map[string]any)
-	if !ok {
-		return
-	}
-	itemProps, ok := items["properties"].(map[string]any)
-	if !ok {
-		return
-	}
-	fieldSchema, ok := itemProps[fieldName].(map[string]any)
-	if !ok {
-		return
-	}
-	fieldSchema["enum"] = enumValues
-}
-
-// UserState represents the state of a Databricks user.
-type UserState struct {
-	ID           string             `json:"id,omitempty"`
-	UserName     string             `json:"user_name"`
-	DisplayName  string             `json:"display_name,omitempty"`
-	Emails       []UserComplexValue `json:"emails,omitempty"`
-	Entitlements []UserComplexValue `json:"entitlements,omitempty"`
-	Roles        []UserComplexValue `json:"roles,omitempty"`
-	Active       bool               `json:"active"`
-	Exist        bool               `json:"_exist"`
-}
-
 // UserHandler handles User resource operations.
 type UserHandler struct{}
 
-func (h *UserHandler) Get(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.GetResult, error) {
-	req, err := dsc.UnmarshalInput[UserSchemaInput](input)
-	if err != nil {
-		return nil, err
+func (h *UserHandler) Get(ctx context.Context, in UserState) (UserState, error) {
+	if err := requireAtLeastOne("id or user_name", in.ID, in.UserName); err != nil {
+		return in, err
 	}
 
-	state, err := h.getCurrentState(ctx, &req)
+	w, err := workspaceClient()
 	if err != nil {
-		return nil, err
+		return in, err
 	}
 
-	return &dsc.GetResult{ActualState: state}, nil
-}
-
-// getCurrentState retrieves the current state for a user from the API.
-func (h *UserHandler) getCurrentState(ctx dsc.ResourceContext, req *UserSchemaInput) (UserState, error) {
-	cmdCtx, w, err := getWorkspaceClient(ctx)
-	if err != nil {
-		return UserState{Exist: false}, err
-	}
-
-	if req.ID != "" {
-		dsc.Logger.Debugf(dsc.MsgLookup, "User", "id="+req.ID)
-		user, err := w.UsersV2.Get(cmdCtx, iam.GetUserRequest{Id: req.ID})
+	if in.ID != "" {
+		dsc.Logger.Debugf(MsgLookup, "User", "id="+in.ID)
+		user, err := w.UsersV2.Get(ctx, iam.GetUserRequest{Id: in.ID})
 		if err != nil {
-			dsc.Logger.Infof(dsc.MsgNotFound, "User", "id="+req.ID)
-			return UserState{Exist: false}, nil
+			dsc.Logger.Infof(MsgNotFound, "User", "id="+in.ID)
+			return dsc.NotFound(UserState{ID: in.ID, UserName: in.UserName}, "User", "id="+in.ID)
 		}
 		return userToState(user), nil
 	}
 
-	if req.UserName != "" {
-		dsc.Logger.Debugf(dsc.MsgLookup, "User", "user_name="+req.UserName)
-		users := w.UsersV2.List(cmdCtx, iam.ListUsersRequest{
-			Filter: "userName eq \"" + req.UserName + "\"",
-		})
+	dsc.Logger.Debugf(MsgLookup, "User", "user_name="+in.UserName)
+	users := w.UsersV2.List(ctx, iam.ListUsersRequest{
+		Filter: "userName eq \"" + in.UserName + "\"",
+	})
 
-		user, err := users.Next(cmdCtx)
-		if err != nil {
-			dsc.Logger.Infof(dsc.MsgNotFound, "User", "user_name="+req.UserName)
-			return UserState{UserName: req.UserName, Exist: false}, nil
-		}
-		return userToState(&user), nil
+	user, err := users.Next(ctx)
+	if err != nil {
+		dsc.Logger.Infof(MsgNotFound, "User", "user_name="+in.UserName)
+		return dsc.NotFound(UserState{UserName: in.UserName}, "User", "user_name="+in.UserName)
 	}
-
-	return UserState{Exist: false}, fmt.Errorf("id or user_name must be provided")
+	return userToState(&user), nil
 }
 
-func (h *UserHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.SetResult, error) {
-	schemaInput, err := dsc.UnmarshalInput[UserSchemaInput](input)
-	if err != nil {
-		return nil, err
+func (h *UserHandler) Set(ctx context.Context, desired UserState) (UserState, error) {
+	if err := requireAtLeastOne("id or user_name", desired.ID, desired.UserName); err != nil {
+		return desired, err
 	}
 
-	beforeState, _ := h.getCurrentState(ctx, &schemaInput)
-
-	cmdCtx, w, err := getWorkspaceClient(ctx)
+	current, err := h.Get(ctx, desired)
 	if err != nil {
-		return nil, err
+		return desired, err
 	}
 
-	if beforeState.Exist {
-		dsc.Logger.Infof(dsc.MsgUpdate, "User", "id="+beforeState.ID)
+	w, err := workspaceClient()
+	if err != nil {
+		return desired, err
+	}
+
+	if current.ShouldExist() {
+		dsc.Logger.Infof(MsgUpdate, "User", "id="+current.ID)
 		// User already exists — GET the full user, overlay desired fields, then PUT back.
 		// SCIM PUT requires the complete user representation including schemas, emails, etc.
-		fullUser, err := w.UsersV2.Get(cmdCtx, iam.GetUserRequest{Id: beforeState.ID})
+		fullUser, err := w.UsersV2.Get(ctx, iam.GetUserRequest{Id: current.ID})
 		if err != nil {
-			return nil, fmt.Errorf("failed to get user for update: %w", err)
+			return desired, fmt.Errorf("failed to get user for update: %w", err)
 		}
-		if schemaInput.DisplayName != "" {
-			fullUser.DisplayName = schemaInput.DisplayName
+		if desired.DisplayName != "" {
+			fullUser.DisplayName = desired.DisplayName
 		}
-		fullUser.Active = schemaInput.Active
-		if len(schemaInput.Emails) > 0 {
-			fullUser.Emails = toIamComplexValues(schemaInput.Emails)
+		fullUser.Active = desired.Active
+		if len(desired.Emails) > 0 {
+			fullUser.Emails = toIamComplexValues(desired.Emails)
 		}
-		if len(schemaInput.Entitlements) > 0 {
-			fullUser.Entitlements = toIamComplexValues(schemaInput.Entitlements)
+		if len(desired.Entitlements) > 0 {
+			fullUser.Entitlements = toIamComplexValues(desired.Entitlements)
 		}
-		if len(schemaInput.Roles) > 0 {
-			fullUser.Roles = toIamComplexValues(schemaInput.Roles)
+		if len(desired.Roles) > 0 {
+			fullUser.Roles = toIamComplexValues(desired.Roles)
 		}
 		updateReq := userToUpdateRequest(fullUser)
-		if err := w.UsersV2.Update(cmdCtx, updateReq); err != nil {
-			return nil, fmt.Errorf("failed to update user: %w", err)
+		if err := w.UsersV2.Update(ctx, updateReq); err != nil {
+			return desired, fmt.Errorf("failed to update user: %w", err)
 		}
-		schemaInput.ID = beforeState.ID
-	} else if schemaInput.UserName != "" {
-		dsc.Logger.Infof(dsc.MsgCreate, "User", "user_name="+schemaInput.UserName)
-		// User doesn't exist — create it.
-		if _, err := w.UsersV2.Create(cmdCtx, schemaInput.toCreateRequest()); err != nil {
-			return nil, err
-		}
+		desired.ID = current.ID
 	} else {
-		return nil, dsc.ValidateRequired(dsc.RequiredField{Name: "user_name", Value: ""})
-	}
-
-	afterState, _ := h.getCurrentState(ctx, &schemaInput)
-	changedProps := dsc.CompareStates(beforeState, afterState)
-
-	return &dsc.SetResult{
-		BeforeState:       beforeState,
-		AfterState:        afterState,
-		ChangedProperties: changedProps,
-	}, nil
-}
-
-func (h *UserHandler) Test(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.TestResult, error) {
-	schemaInput, err := dsc.UnmarshalInput[UserSchemaInput](input)
-	if err != nil {
-		return nil, err
-	}
-
-	actualState, err := h.getCurrentState(ctx, &schemaInput)
-	if err != nil {
-		return nil, err
-	}
-
-	desiredState := UserState{
-		ID:           schemaInput.ID,
-		UserName:     schemaInput.UserName,
-		DisplayName:  schemaInput.DisplayName,
-		Active:       schemaInput.Active,
-		Emails:       schemaInput.Emails,
-		Entitlements: schemaInput.Entitlements,
-		Roles:        schemaInput.Roles,
-		Exist:        true,
-	}
-
-	differing := dsc.CompareStates(desiredState, actualState)
-	inDesiredState := len(differing) == 0
-
-	return &dsc.TestResult{
-		DesiredState:        desiredState,
-		ActualState:         actualState,
-		InDesiredState:      inDesiredState,
-		DifferingProperties: differing,
-	}, nil
-}
-
-func (h *UserHandler) Delete(ctx dsc.ResourceContext, input json.RawMessage) error {
-	schemaInput, err := dsc.UnmarshalInput[UserSchemaInput](input)
-	if err != nil {
-		return err
-	}
-
-	cmdCtx, w, err := getWorkspaceClient(ctx)
-	if err != nil {
-		return err
-	}
-
-	if schemaInput.ID != "" {
-		dsc.Logger.Debugf(dsc.MsgDelete, "User", "id="+schemaInput.ID)
-		return w.UsersV2.Delete(cmdCtx, iam.DeleteUserRequest{Id: schemaInput.ID})
-	}
-
-	if schemaInput.UserName != "" {
-		dsc.Logger.Debugf(dsc.MsgDelete, "User", "user_name="+schemaInput.UserName)
-		users := w.UsersV2.List(cmdCtx, iam.ListUsersRequest{
-			Filter: "userName eq \"" + schemaInput.UserName + "\"",
-		})
-
-		user, err := users.Next(cmdCtx)
-		if err != nil {
-			return dsc.NotFoundError("user", "user_name="+schemaInput.UserName)
+		dsc.Logger.Infof(MsgCreate, "User", "user_name="+desired.UserName)
+		// User doesn't exist — create it.
+		if err := requireFields(field{"user_name", desired.UserName}); err != nil {
+			return desired, err
 		}
-		return w.UsersV2.Delete(cmdCtx, iam.DeleteUserRequest{Id: user.Id})
+		if _, err := w.UsersV2.Create(ctx, desired.toCreateRequest()); err != nil {
+			return desired, err
+		}
 	}
 
-	return dsc.ValidateRequired(dsc.RequiredField{Name: "id or user_name", Value: ""})
+	return h.Get(ctx, desired)
 }
 
-func (h *UserHandler) Export(ctx dsc.ResourceContext) ([]any, error) {
-	cmdCtx, w, err := getWorkspaceClient(ctx)
+func (h *UserHandler) Test(ctx context.Context, desired UserState) (dsc.TestResult[UserState], error) {
+	actual, err := h.Get(ctx, desired)
+	if err != nil {
+		return dsc.TestResult[UserState]{}, err
+	}
+
+	result := dsc.TestResult[UserState]{ActualState: actual}
+	if !actual.ShouldExist() {
+		// CompareStates skips canonical properties; report existence drift explicitly.
+		result.DifferingProperties = []string{"_exist"}
+		return result, nil
+	}
+	result.DifferingProperties = dsc.CompareStates(desired, actual)
+	return result, nil
+}
+
+func (h *UserHandler) Delete(ctx context.Context, in UserState) error {
+	if err := requireAtLeastOne("id or user_name", in.ID, in.UserName); err != nil {
+		return err
+	}
+
+	w, err := workspaceClient()
+	if err != nil {
+		return err
+	}
+
+	if in.ID != "" {
+		dsc.Logger.Debugf(MsgDelete, "User", "id="+in.ID)
+		return w.UsersV2.Delete(ctx, iam.DeleteUserRequest{Id: in.ID})
+	}
+
+	dsc.Logger.Debugf(MsgDelete, "User", "user_name="+in.UserName)
+	users := w.UsersV2.List(ctx, iam.ListUsersRequest{
+		Filter: "userName eq \"" + in.UserName + "\"",
+	})
+
+	user, err := users.Next(ctx)
+	if err != nil {
+		// Already absent — deleting a missing instance succeeds.
+		dsc.Logger.Infof(MsgNotFound, "User", "user_name="+in.UserName)
+		return nil
+	}
+	return w.UsersV2.Delete(ctx, iam.DeleteUserRequest{Id: user.Id})
+}
+
+func (h *UserHandler) Export(ctx context.Context, _ UserState) ([]UserState, error) {
+	w, err := workspaceClient()
 	if err != nil {
 		return nil, err
 	}
 
-	dsc.Logger.Debugf(dsc.MsgListAll, "User")
-	users, err := w.UsersV2.ListAll(cmdCtx, iam.ListUsersRequest{})
+	dsc.Logger.Debugf(MsgListAll, "User")
+	users, err := w.UsersV2.ListAll(ctx, iam.ListUsersRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list users: %w", err)
 	}
 
-	var allUsers []any
+	var allUsers []UserState
 	for i := range users {
 		allUsers = append(allUsers, userToState(&users[i]))
 	}
@@ -320,7 +222,7 @@ func (h *UserHandler) Export(ctx dsc.ResourceContext) ([]any, error) {
 }
 
 func userToState(user *iam.User) UserState {
-	return UserState{
+	state := UserState{
 		ID:           user.Id,
 		UserName:     user.UserName,
 		DisplayName:  user.DisplayName,
@@ -328,42 +230,9 @@ func userToState(user *iam.User) UserState {
 		Emails:       fromIamComplexValues(user.Emails),
 		Entitlements: fromIamComplexValues(user.Entitlements),
 		Roles:        fromIamComplexValues(user.Roles),
-		Exist:        true,
 	}
-}
-
-// toIamComplexValues converts UserComplexValue slices to iam.ComplexValue slices.
-func toIamComplexValues(vals []UserComplexValue) []iam.ComplexValue {
-	if len(vals) == 0 {
-		return nil
-	}
-	out := make([]iam.ComplexValue, len(vals))
-	for i, v := range vals {
-		out[i] = iam.ComplexValue{
-			Value:   v.Value,
-			Display: v.Display,
-			Type:    v.Type,
-			Primary: v.Primary,
-		}
-	}
-	return out
-}
-
-// fromIamComplexValues converts iam.ComplexValue slices to UserComplexValue slices.
-func fromIamComplexValues(vals []iam.ComplexValue) []UserComplexValue {
-	if len(vals) == 0 {
-		return nil
-	}
-	out := make([]UserComplexValue, len(vals))
-	for i, v := range vals {
-		out[i] = UserComplexValue{
-			Value:   v.Value,
-			Display: v.Display,
-			Type:    v.Type,
-			Primary: v.Primary,
-		}
-	}
-	return out
+	state.SetExist(true)
+	return state
 }
 
 // userToUpdateRequest converts a full iam.User (from Get) to an UpdateUserRequest for PUT.
@@ -382,41 +251,4 @@ func userToUpdateRequest(user *iam.User) iam.UpdateUserRequest {
 		UserName:        user.UserName,
 		ForceSendFields: []string{"Active"},
 	}
-}
-
-// getWorkspaceClient creates a new Databricks workspace client.
-func getWorkspaceClient(ctx dsc.ResourceContext) (context.Context, *databricks.WorkspaceClient, error) {
-	cmdCtx := ctx.Cmd.Context()
-	if cmdCtx == nil {
-		cmdCtx = context.Background()
-	}
-
-	dsc.Logger.Debug(dsc.MsgCreatingWorkspaceClient)
-	w, err := databricks.NewWorkspaceClient()
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create Databricks client: %w", err)
-	}
-
-	return cmdCtx, w, nil
-}
-
-func getAccountClient(ctx dsc.ResourceContext) (context.Context, *databricks.AccountClient, error) {
-	cmdCtx := ctx.Cmd.Context()
-	if cmdCtx == nil {
-		cmdCtx = context.Background()
-	}
-
-	var a *databricks.AccountClient
-	var err error
-	dsc.Logger.Debug(dsc.MsgCreatingAccountClient)
-	if host := os.Getenv("DATABRICKS_ACCOUNT_HOST"); host != "" {
-		a, err = databricks.NewAccountClient(&databricks.Config{Host: host})
-	} else {
-		a, err = databricks.NewAccountClient()
-	}
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create Databricks account client: %w", err)
-	}
-
-	return cmdCtx, a, nil
 }

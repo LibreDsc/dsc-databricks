@@ -1,20 +1,8 @@
-package dsc
+package resources
 
 // Log message format strings.
 // Centralizing messages enables future localization and ensures consistent wording
-// across all DSC resource handlers and commands.
-
-// Command-level messages used in CLI command handlers.
-const (
-	MsgCmdStarting     = "%s: starting for %s"
-	MsgCmdInput        = "%s: input for %s: %s"
-	MsgCmdFailed       = "%s failed for %s: %s"
-	MsgCmdCompleted    = "%s: completed for %s"
-	MsgSetCompleted    = "set: completed for %s, changed properties: %v"
-	MsgSetNoChanges    = "set: completed for %s, no changes"
-	MsgTestCompleted   = "test: completed for %s, inDesiredState=%t"
-	MsgExportCompleted = "export: completed for %s, returned %d instances"
-)
+// across all DSC resource handlers.
 
 // Resource-level messages used across all resource handlers.
 const (

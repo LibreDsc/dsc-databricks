@@ -1,11 +1,10 @@
 module github.com/LibreDsc/dsc-databricks
 
-go 1.25.0
+go 1.26
 
 require (
+	github.com/LibreDsc/dsc-go-rdk v0.1.0
 	github.com/databricks/databricks-sdk-go v0.118.0
-	github.com/spf13/cobra v1.10.2
-	github.com/spf13/pflag v1.0.10
 )
 
 require (
@@ -21,7 +20,6 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.11 // indirect
 	github.com/googleapis/gax-go/v2 v2.17.0 // indirect
-	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.65.0 // indirect

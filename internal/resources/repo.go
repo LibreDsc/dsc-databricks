@@ -1,153 +1,112 @@
 package resources
 
 import (
-	"encoding/json"
-	"reflect"
+	"context"
 
-	"github.com/LibreDsc/dsc-databricks/internal/dsc"
+	dsc "github.com/LibreDsc/dsc-go-rdk"
 	"github.com/databricks/databricks-sdk-go/service/workspace"
 )
 
-func init() {
-	dsc.RegisterResourceWithMetadata("LibreDsc.Databricks/Repo", &RepoHandler{}, repoMetadata())
-}
-
-// Repo property descriptions from SDK documentation.
-var repoPropertyDescriptions = dsc.PropertyDescriptions{
-	"path":          "Desired path for the repo in the workspace. If the repo is in /Repos, the path must be in the format /Repos/{folder}/{repo-name}.",
-	"url":           "URL of the remote Git repository to link. Required when creating a new repo.",
-	"provider":      "Git provider (case-insensitive). Valid values: gitHub, bitbucketCloud, gitLab, azureDevOpsServices, gitHubEnterprise, bitbucketServer, gitLabEnterpriseEdition, awsCodeCommit.",
-	"branch":        "Branch to check out. When omitted on create, the repository default branch is used.",
-	"id":            "Databricks numeric ID of the repo object in the workspace.",
-	"head_commit_id": "SHA-1 hash of the current HEAD commit.",
-}
-
-// RepoSchemaInput defines the desired-state fields for the schema and for
-// unmarshaling input. id and head_commit_id are read-only/computed, so they
-// are omitted from the schema type and carry omitempty to remain optional on
-// input.
-type RepoSchemaInput struct {
-	Path     string `json:"path"`
-	URL      string `json:"url,omitempty"`
-	Provider string `json:"provider,omitempty"`
-	Branch   string `json:"branch,omitempty"`
-}
-
-func repoMetadata() dsc.ResourceMetadata {
-	return dsc.BuildMetadata(dsc.MetadataConfig{
-		ResourceType:      "LibreDsc.Databricks/Repo",
-		Description:       "Manage Databricks Git folders (repos)",
-		SchemaDescription: "Schema for managing Databricks Git folders linked to a remote repository.",
-		ResourceName:      "repo",
-		Tags:              []string{"databricks", "repo", "git", "workspace"},
-		Descriptions:      repoPropertyDescriptions,
-		SchemaType:        reflect.TypeFor[RepoSchemaInput](),
-		// head_commit_id is a computed property that differs from any input
-		// representation, but it is never part of desired state. branch is
-		// plain value equality. The DSC synthetic test is sufficient.
-		OmitTest: true,
-	})
-}
-
-// RepoState represents the full state of a Databricks repo.
+// RepoState represents the full state of a Databricks repo. head_commit_id and
+// id are computed by the service.
 type RepoState struct {
-	Path         string `json:"path"`
-	URL          string `json:"url,omitempty"`
-	Provider     string `json:"provider,omitempty"`
-	Branch       string `json:"branch,omitempty"`
-	HeadCommitID string `json:"head_commit_id,omitempty"`
-	ID           int64  `json:"id,omitempty"`
-	Exist        bool   `json:"_exist"`
+	dsc.ExistProperty
+	Path         string `json:"path" description:"Desired path for the repo in the workspace. If the repo is in /Repos, the path must be in the format /Repos/{folder}/{repo-name}."`
+	URL          string `json:"url,omitempty" description:"URL of the remote Git repository to link. Required when creating a new repo."`
+	Provider     string `json:"provider,omitempty" description:"Git provider (case-insensitive). Valid values: gitHub, bitbucketCloud, gitLab, azureDevOpsServices, gitHubEnterprise, bitbucketServer, gitLabEnterpriseEdition, awsCodeCommit."`
+	Branch       string `json:"branch,omitempty" description:"Branch to check out. When omitted on create, the repository default branch is used."`
+	HeadCommitID string `json:"head_commit_id,omitempty" description:"SHA-1 hash of the current HEAD commit. (read-only)"`
+	ID           int64  `json:"id,omitempty" description:"Databricks numeric ID of the repo object in the workspace. (read-only)"`
 }
 
-// RepoHandler handles Repo resource operations.
+func repoConfig() dsc.ResourceConfig {
+	return dsc.ResourceConfig{
+		Type:        "LibreDsc.Databricks/Repo",
+		Version:     "0.1.0",
+		Description: "Manage Databricks Git folders (repos)",
+		Tags:        []string{"databricks", "repo", "git", "workspace"},
+		SetReturn:   dsc.SetReturnStateAndDiff,
+		SchemaOptions: dsc.SchemaOptions{
+			SchemaDescription:         "Schema for managing Databricks Git folders linked to a remote repository.",
+			AllowAdditionalProperties: true,
+		},
+	}
+}
+
+// RepoHandler handles Repo resource operations. head_commit_id is a computed
+// property that is never part of desired state and branch is plain value
+// equality, so no Testable is implemented — the DSC synthetic test suffices.
 type RepoHandler struct{}
 
 func repoInfoToState(r *workspace.RepoInfo) RepoState {
-	return RepoState{
+	state := RepoState{
 		ID:           r.Id,
 		Path:         r.Path,
 		URL:          r.Url,
 		Provider:     r.Provider,
 		Branch:       r.Branch,
 		HeadCommitID: r.HeadCommitId,
-		Exist:        true,
 	}
+	state.SetExist(true)
+	return state
 }
 
-func (h *RepoHandler) getByPath(ctx dsc.ResourceContext, path string) (RepoState, error) {
-	cmdCtx, w, err := getWorkspaceClient(ctx)
-	if err != nil {
-		return RepoState{Path: path, Exist: false}, err
+func (h *RepoHandler) Get(ctx context.Context, in RepoState) (RepoState, error) {
+	if err := requireFields(field{"path", in.Path}); err != nil {
+		return in, err
 	}
 
-	dsc.Logger.Debugf(dsc.MsgLookup, "Repo", "path="+path)
-	info, err := w.Repos.GetByPath(cmdCtx, path)
+	w, err := workspaceClient()
 	if err != nil {
-		dsc.Logger.Infof(dsc.MsgNotFound, "Repo", "path="+path)
-		return RepoState{Path: path, Exist: false}, nil
+		return in, err
+	}
+
+	dsc.Logger.Debugf(MsgLookup, "Repo", "path="+in.Path)
+	info, err := w.Repos.GetByPath(ctx, in.Path)
+	if err != nil {
+		dsc.Logger.Infof(MsgNotFound, "Repo", "path="+in.Path)
+		// Echo back the requested settings so the missing state is self-describing.
+		return dsc.NotFound(RepoState{
+			Path:     in.Path,
+			URL:      in.URL,
+			Provider: in.Provider,
+			Branch:   in.Branch,
+		}, "Repo", "path="+in.Path)
 	}
 	return repoInfoToState(info), nil
 }
 
-func (h *RepoHandler) Get(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.GetResult, error) {
-	req, err := dsc.UnmarshalInput[RepoSchemaInput](input)
+func (h *RepoHandler) Set(ctx context.Context, desired RepoState) (RepoState, error) {
+	if err := requireFields(field{"path", desired.Path}); err != nil {
+		return desired, err
+	}
+
+	current, err := h.Get(ctx, desired)
 	if err != nil {
-		return nil, err
-	}
-	if err := dsc.ValidateRequired(dsc.RequiredField{Name: "path", Value: req.Path}); err != nil {
-		return nil, err
+		return desired, err
 	}
 
-	state, err := h.getByPath(ctx, req.Path)
+	w, err := workspaceClient()
 	if err != nil {
-		return nil, err
+		return desired, err
 	}
 
-	if !state.Exist {
-		state.URL = req.URL
-		state.Provider = req.Provider
-		state.Branch = req.Branch
-	}
-
-	return &dsc.GetResult{ActualState: state}, nil
-}
-
-func (h *RepoHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.SetResult, error) {
-	req, err := dsc.UnmarshalInput[RepoSchemaInput](input)
-	if err != nil {
-		return nil, err
-	}
-	if err := dsc.ValidateRequired(dsc.RequiredField{Name: "path", Value: req.Path}); err != nil {
-		return nil, err
-	}
-
-	beforeState, err := h.getByPath(ctx, req.Path)
-	if err != nil {
-		return nil, err
-	}
-
-	cmdCtx, w, err := getWorkspaceClient(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if !beforeState.Exist {
-		dsc.Logger.Infof(dsc.MsgCreate, "Repo", "path="+req.Path)
-		if err := dsc.ValidateRequired(
-			dsc.RequiredField{Name: "url", Value: req.URL},
-			dsc.RequiredField{Name: "provider", Value: req.Provider},
+	if !current.ShouldExist() {
+		dsc.Logger.Infof(MsgCreate, "Repo", "path="+desired.Path)
+		if err := requireFields(
+			field{"url", desired.URL},
+			field{"provider", desired.Provider},
 		); err != nil {
-			return nil, err
+			return desired, err
 		}
 
-		created, err := w.Repos.Create(cmdCtx, workspace.CreateRepoRequest{
-			Url:      req.URL,
-			Provider: req.Provider,
-			Path:     req.Path,
+		created, err := w.Repos.Create(ctx, workspace.CreateRepoRequest{
+			Url:      desired.URL,
+			Provider: desired.Provider,
+			Path:     desired.Path,
 		})
 		if err != nil {
-			return nil, err
+			return desired, err
 		}
 
 		afterState := RepoState{
@@ -157,118 +116,72 @@ func (h *RepoHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.
 			Provider:     created.Provider,
 			Branch:       created.Branch,
 			HeadCommitID: created.HeadCommitId,
-			Exist:        true,
 		}
+		afterState.SetExist(true)
 
 		// If a specific branch was requested and differs from the cloned default, update now.
-		if req.Branch != "" && req.Branch != created.Branch {
-			if err := w.Repos.Update(cmdCtx, workspace.UpdateRepoRequest{
+		if desired.Branch != "" && desired.Branch != created.Branch {
+			if err := w.Repos.Update(ctx, workspace.UpdateRepoRequest{
 				RepoId: created.Id,
-				Branch: req.Branch,
+				Branch: desired.Branch,
 			}); err != nil {
-				return nil, err
+				return desired, err
 			}
-			afterState.Branch = req.Branch
+			afterState.Branch = desired.Branch
 		}
-
-		changedProps := dsc.CompareStates(beforeState, afterState)
-		return &dsc.SetResult{
-			BeforeState:       beforeState,
-			AfterState:        afterState,
-			ChangedProperties: changedProps,
-		}, nil
+		return afterState, nil
 	}
 
 	// Repo already exists — update the branch if requested and different.
-	dsc.Logger.Infof(dsc.MsgUpdate, "Repo", "path="+req.Path)
-	afterState := beforeState
-	if req.Branch != "" && req.Branch != beforeState.Branch {
-		if err := w.Repos.Update(cmdCtx, workspace.UpdateRepoRequest{
-			RepoId: beforeState.ID,
-			Branch: req.Branch,
+	dsc.Logger.Infof(MsgUpdate, "Repo", "path="+desired.Path)
+	afterState := current
+	if desired.Branch != "" && desired.Branch != current.Branch {
+		if err := w.Repos.Update(ctx, workspace.UpdateRepoRequest{
+			RepoId: current.ID,
+			Branch: desired.Branch,
 		}); err != nil {
-			return nil, err
+			return desired, err
 		}
-		afterState.Branch = req.Branch
+		afterState.Branch = desired.Branch
 	}
-
-	changedProps := dsc.CompareStates(beforeState, afterState)
-	return &dsc.SetResult{
-		BeforeState:       beforeState,
-		AfterState:        afterState,
-		ChangedProperties: changedProps,
-	}, nil
+	return afterState, nil
 }
 
-func (h *RepoHandler) Test(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.TestResult, error) {
-	// OmitTest: true — DSC uses the synthetic test (value equality).
-	// This method is never invoked via the manifest, but must satisfy the interface.
-	req, err := dsc.UnmarshalInput[RepoSchemaInput](input)
-	if err != nil {
-		return nil, err
-	}
-
-	getResult, err := h.Get(ctx, input)
-	if err != nil {
-		return nil, err
-	}
-
-	desiredState := RepoState{
-		Path:     req.Path,
-		URL:      req.URL,
-		Provider: req.Provider,
-		Branch:   req.Branch,
-		Exist:    true,
-	}
-
-	differing := dsc.CompareStates(desiredState, getResult.ActualState)
-	return &dsc.TestResult{
-		DesiredState:        desiredState,
-		ActualState:         getResult.ActualState,
-		InDesiredState:      len(differing) == 0,
-		DifferingProperties: differing,
-	}, nil
-}
-
-func (h *RepoHandler) Delete(ctx dsc.ResourceContext, input json.RawMessage) error {
-	req, err := dsc.UnmarshalInput[RepoSchemaInput](input)
-	if err != nil {
-		return err
-	}
-	if err := dsc.ValidateRequired(dsc.RequiredField{Name: "path", Value: req.Path}); err != nil {
+func (h *RepoHandler) Delete(ctx context.Context, in RepoState) error {
+	if err := requireFields(field{"path", in.Path}); err != nil {
 		return err
 	}
 
-	state, err := h.getByPath(ctx, req.Path)
+	current, err := h.Get(ctx, in)
 	if err != nil {
 		return err
 	}
-	if !state.Exist {
+	if !current.ShouldExist() {
 		return nil
 	}
 
-	dsc.Logger.Debugf(dsc.MsgDelete, "Repo", "path="+req.Path)
-	cmdCtx, w, err := getWorkspaceClient(ctx)
+	w, err := workspaceClient()
 	if err != nil {
 		return err
 	}
 
-	return w.Repos.DeleteByRepoId(cmdCtx, state.ID)
+	dsc.Logger.Debugf(MsgDelete, "Repo", "path="+in.Path)
+	return w.Repos.DeleteByRepoId(ctx, current.ID)
 }
 
-func (h *RepoHandler) Export(ctx dsc.ResourceContext) ([]any, error) {
-	cmdCtx, w, err := getWorkspaceClient(ctx)
+func (h *RepoHandler) Export(ctx context.Context, _ RepoState) ([]RepoState, error) {
+	w, err := workspaceClient()
 	if err != nil {
 		return nil, err
 	}
 
-	dsc.Logger.Debugf(dsc.MsgListAll, "Repo")
-	repos, err := w.Repos.ListAll(cmdCtx, workspace.ListReposRequest{})
+	dsc.Logger.Debugf(MsgListAll, "Repo")
+	repos, err := w.Repos.ListAll(ctx, workspace.ListReposRequest{})
 	if err != nil {
 		return nil, err
 	}
 
-	all := make([]any, 0, len(repos))
+	all := make([]RepoState, 0, len(repos))
 	for i := range repos {
 		all = append(all, repoInfoToState(&repos[i]))
 	}

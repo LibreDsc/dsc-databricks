@@ -96,7 +96,7 @@ Describe 'Databricks ServicePrincipal Resource' -Tag 'Databricks', 'ServicePrinc
             $result.afterState._exist | Should -Be $true
             $result.afterState.display_name | Should -Be $script:testSpName
             $result.afterState.active | Should -Be $true
-            $result.changedProperties | Should -Contain '_exist'
+            $result.changedProperties | Should -Contain 'display_name'
         }
 
         It 'should verify the created service principal via get' {

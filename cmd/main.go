@@ -1,19 +1,14 @@
+// Package main is the entry point for the dsc-databricks executable.
 package main
 
 import (
-	"fmt"
-	"os"
-
-	"github.com/LibreDsc/dsc-databricks/internal/dsc"
-
-	// Import resources package to register all resource handlers via init()
-	_ "github.com/LibreDsc/dsc-databricks/internal/resources"
+	"github.com/LibreDsc/dsc-databricks/internal/resources"
+	dsc "github.com/LibreDsc/dsc-go-rdk"
 )
 
 func main() {
-	cmd := dsc.NewRootCommand()
-	if err := cmd.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
-		os.Exit(1)
-	}
+	m := dsc.NewManager("dsc-databricks",
+		dsc.WithDescription("Microsoft DSC v3 resources for Databricks"))
+	resources.RegisterAll(m)
+	m.Main()
 }

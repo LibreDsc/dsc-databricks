@@ -4,9 +4,9 @@
     manifest files.
 
 .DESCRIPTION
-    Compiles the Go project into the output/ directory and generates the 
-    resources manifest file LibreDsc.Databricks.dsc.manifests.json, which contains metadata about the resources implemented in this module.
-    The manifest file is used by Microsoft DSC to discover and load the resources at runtime.
+    Compiles the Go project into the output/ directory and generates one
+    <type>.dsc.resource.json manifest file per resource, which contains metadata about the resources implemented in this module.
+    The manifest files are used by Microsoft DSC to discover and load the resources at runtime.
 
 .PARAMETER OutputPath
     Directory for the build artifacts. Defaults to 'output' in the repository root.
@@ -57,8 +57,14 @@ if ($LASTEXITCODE -ne 0)
 
 if (Test-Path $exePath)
 {
-    $dscManifest = & $exePath manifest | ConvertFrom-Json
-    $dscManifest | ConvertTo-Json -Depth 20 | Set-Content -Path (Join-Path $outputPath 'LibreDsc.Databricks.dsc.manifests.json') -Encoding utf8
+    Get-ChildItem -Path $outputPath -Filter '*.dsc.resource.json' -ErrorAction Ignore | Remove-Item
+    # Remove the pre-migration aggregate manifest if it is still around.
+    Remove-Item -Path (Join-Path $outputPath 'LibreDsc.Databricks.dsc.manifests.json') -ErrorAction Ignore
+    & $exePath manifest --out-dir $outputPath
+    if ($LASTEXITCODE -ne 0)
+    {
+        throw "Manifest generation failed with exit code $LASTEXITCODE"
+    }
 }
 
 if ($RunTests) 

@@ -1,38 +1,26 @@
 package resources
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
-	"reflect"
 
-	"github.com/LibreDsc/dsc-databricks/internal/dsc"
+	dsc "github.com/LibreDsc/dsc-go-rdk"
 	"github.com/databricks/databricks-sdk-go/service/sql"
 )
 
-func init() {
-	dsc.RegisterResourceWithMetadata("LibreDsc.Databricks/SqlWarehousePermission", &SqlWarehousePermissionHandler{}, sqlWarehousePermissionMetadata())
+// SqlWarehousePermissionState represents the state of a single permission entry
+// on a Databricks SQL warehouse.
+type SqlWarehousePermissionState struct {
+	dsc.ExistProperty
+	WarehouseID          string `json:"warehouse_id,omitempty" description:"The unique identifier of the SQL warehouse."`
+	WarehouseName        string `json:"warehouse_name,omitempty" description:"The logical name of the SQL warehouse. Can be used instead of warehouse_id for lookup."`
+	UserName             string `json:"user_name,omitempty" description:"The name of the user to which the permission applies."`
+	GroupName            string `json:"group_name,omitempty" description:"The name of the group to which the permission applies."`
+	ServicePrincipalName string `json:"service_principal_name,omitempty" description:"The application ID of the service principal to which the permission applies."`
+	PermissionLevel      string `json:"permission_level,omitempty" description:"The permission level: CAN_MANAGE, CAN_MONITOR, CAN_USE, CAN_VIEW, or IS_OWNER." enum:"CAN_MANAGE,CAN_MONITOR,CAN_USE,CAN_VIEW,IS_OWNER"`
 }
 
-var sqlWarehousePermissionPropertyDescriptions = dsc.PropertyDescriptions{
-	"warehouse_id":          "The unique identifier of the SQL warehouse.",
-	"warehouse_name":        "The logical name of the SQL warehouse. Can be used instead of warehouse_id for lookup.",
-	"user_name":             "The name of the user to which the permission applies.",
-	"group_name":            "The name of the group to which the permission applies.",
-	"service_principal_name": "The application ID of the service principal to which the permission applies.",
-	"permission_level":      "The permission level: CAN_MANAGE, CAN_MONITOR, CAN_USE, CAN_VIEW, or IS_OWNER.",
-}
-
-// SqlWarehousePermissionSchemaInput defines the input fields for the schema.
-type SqlWarehousePermissionSchemaInput struct {
-	WarehouseID          string `json:"warehouse_id,omitempty"`
-	WarehouseName        string `json:"warehouse_name,omitempty"`
-	UserName             string `json:"user_name,omitempty"`
-	GroupName            string `json:"group_name,omitempty"`
-	ServicePrincipalName string `json:"service_principal_name,omitempty"`
-	PermissionLevel      string `json:"permission_level,omitempty"`
-}
-
-func (s *SqlWarehousePermissionSchemaInput) principalKey() (string, string) {
+func (s *SqlWarehousePermissionState) principalKey() (string, string) {
 	if s.UserName != "" {
 		return "user_name", s.UserName
 	}
@@ -45,35 +33,24 @@ func (s *SqlWarehousePermissionSchemaInput) principalKey() (string, string) {
 	return "", ""
 }
 
-func sqlWarehousePermissionMetadata() dsc.ResourceMetadata {
-	return dsc.BuildMetadata(dsc.MetadataConfig{
-		ResourceType:      "LibreDsc.Databricks/SqlWarehousePermission",
-		Description:       "Manage Databricks SQL warehouse permissions.",
-		SchemaDescription: "Schema for managing Databricks SQL warehouse permissions.",
-		ResourceName:      "SQL warehouse permission",
-		Tags:              []string{"databricks", "sqlwarehouse", "permissions", "sql"},
-		Descriptions:      sqlWarehousePermissionPropertyDescriptions,
-		SchemaType:        reflect.TypeFor[SqlWarehousePermissionSchemaInput](),
-		OmitTest:          true,
-	})
-}
-
-// SqlWarehousePermissionState represents the state of a single permission entry
-// on a Databricks SQL warehouse.
-type SqlWarehousePermissionState struct {
-	WarehouseID          string `json:"warehouse_id,omitempty"`
-	WarehouseName        string `json:"warehouse_name,omitempty"`
-	UserName             string `json:"user_name,omitempty"`
-	GroupName            string `json:"group_name,omitempty"`
-	ServicePrincipalName string `json:"service_principal_name,omitempty"`
-	PermissionLevel      string `json:"permission_level,omitempty"`
-	Exist                bool   `json:"_exist"`
+func sqlWarehousePermissionConfig() dsc.ResourceConfig {
+	return dsc.ResourceConfig{
+		Type:        "LibreDsc.Databricks/SqlWarehousePermission",
+		Version:     "0.1.0",
+		Description: "Manage Databricks SQL warehouse permissions.",
+		Tags:        []string{"databricks", "sqlwarehouse", "permissions", "sql"},
+		SetReturn:   dsc.SetReturnStateAndDiff,
+		SchemaOptions: dsc.SchemaOptions{
+			SchemaDescription:         "Schema for managing Databricks SQL warehouse permissions.",
+			AllowAdditionalProperties: true,
+		},
+	}
 }
 
 // SqlWarehousePermissionHandler handles SqlWarehousePermission resource operations.
 type SqlWarehousePermissionHandler struct{}
 
-func matchesWarehousePrincipal(entry sql.WarehouseAccessControlResponse, req *SqlWarehousePermissionSchemaInput) bool {
+func matchesWarehousePrincipal(entry sql.WarehouseAccessControlResponse, req *SqlWarehousePermissionState) bool {
 	if req.UserName != "" {
 		return entry.UserName == req.UserName
 	}
@@ -95,228 +72,150 @@ func directWarehousePermissionLevel(entry sql.WarehouseAccessControlResponse) st
 	return ""
 }
 
-func (h *SqlWarehousePermissionHandler) Get(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.GetResult, error) {
-	req, err := dsc.UnmarshalInput[SqlWarehousePermissionSchemaInput](input)
+func validateWarehousePermissionIdentity(in *SqlWarehousePermissionState) error {
+	if err := requireAtLeastOne("warehouse_id or warehouse_name", in.WarehouseID, in.WarehouseName); err != nil {
+		return err
+	}
+	return requireAtLeastOne("user_name, group_name, or service_principal_name",
+		in.UserName, in.GroupName, in.ServicePrincipalName)
+}
+
+func (h *SqlWarehousePermissionHandler) Get(ctx context.Context, in SqlWarehousePermissionState) (SqlWarehousePermissionState, error) {
+	if err := validateWarehousePermissionIdentity(&in); err != nil {
+		return in, err
+	}
+
+	w, err := workspaceClient()
 	if err != nil {
-		return nil, err
-	}
-	if err := dsc.ValidateAtLeastOne("warehouse_id or warehouse_name", req.WarehouseID, req.WarehouseName); err != nil {
-		return nil, err
-	}
-	if err := dsc.ValidateAtLeastOne("user_name, group_name, or service_principal_name", req.UserName, req.GroupName, req.ServicePrincipalName); err != nil {
-		return nil, err
+		return in, err
 	}
 
-	cmdCtx, w, err := getWorkspaceClient(ctx)
-	if err != nil {
-		return nil, err
+	warehouseID := in.WarehouseID
+	warehouseName := in.WarehouseName
+
+	notFoundState := func() SqlWarehousePermissionState {
+		return SqlWarehousePermissionState{
+			WarehouseID:          warehouseID,
+			WarehouseName:        warehouseName,
+			UserName:             in.UserName,
+			GroupName:            in.GroupName,
+			ServicePrincipalName: in.ServicePrincipalName,
+		}
 	}
 
-	warehouseID := req.WarehouseID
-	warehouseName := req.WarehouseName
-
-	if warehouseID == "" && warehouseName != "" {
-		dsc.Logger.Debugf(dsc.MsgLookup, "SqlWarehousePermission", "warehouse_name="+warehouseName)
-		info, err := w.Warehouses.GetByName(cmdCtx, warehouseName)
+	if warehouseID == "" {
+		dsc.Logger.Debugf(MsgLookup, "SqlWarehousePermission", "warehouse_name="+warehouseName)
+		info, err := w.Warehouses.GetByName(ctx, warehouseName)
 		if err != nil {
-			dsc.Logger.Infof(dsc.MsgNotFound, "SqlWarehousePermission", "warehouse_name="+warehouseName)
-			return &dsc.GetResult{ActualState: SqlWarehousePermissionState{
-				WarehouseName:        warehouseName,
-				UserName:             req.UserName,
-				GroupName:            req.GroupName,
-				ServicePrincipalName: req.ServicePrincipalName,
-				Exist:                false,
-			}}, nil
+			dsc.Logger.Infof(MsgNotFound, "SqlWarehousePermission", "warehouse_name="+warehouseName)
+			return dsc.NotFound(notFoundState(), "SqlWarehousePermission", "warehouse_name="+warehouseName)
 		}
 		warehouseID = info.Id
 		warehouseName = info.Name
 	}
 
-	principalType, principalName := req.principalKey()
-	dsc.Logger.Debugf(dsc.MsgLookup, "SqlWarehousePermission", principalType+"="+principalName+" warehouse_id="+warehouseID)
+	principalType, principalName := in.principalKey()
+	dsc.Logger.Debugf(MsgLookup, "SqlWarehousePermission", principalType+"="+principalName+" warehouse_id="+warehouseID)
 
-	perms, err := w.Warehouses.GetPermissions(cmdCtx, sql.GetWarehousePermissionsRequest{WarehouseId: warehouseID})
+	perms, err := w.Warehouses.GetPermissions(ctx, sql.GetWarehousePermissionsRequest{WarehouseId: warehouseID})
 	if err != nil {
-		dsc.Logger.Infof(dsc.MsgNotFound, "SqlWarehousePermission", "warehouse_id="+warehouseID)
-		return &dsc.GetResult{ActualState: SqlWarehousePermissionState{
-			WarehouseID:          warehouseID,
-			WarehouseName:        warehouseName,
-			UserName:             req.UserName,
-			GroupName:            req.GroupName,
-			ServicePrincipalName: req.ServicePrincipalName,
-			Exist:                false,
-		}}, nil
+		dsc.Logger.Infof(MsgNotFound, "SqlWarehousePermission", "warehouse_id="+warehouseID)
+		return dsc.NotFound(notFoundState(), "SqlWarehousePermission", "warehouse_id="+warehouseID)
 	}
 
 	for _, entry := range perms.AccessControlList {
-		if !matchesWarehousePrincipal(entry, &req) {
+		if !matchesWarehousePrincipal(entry, &in) {
 			continue
 		}
 		level := directWarehousePermissionLevel(entry)
 		if level != "" {
-			return &dsc.GetResult{ActualState: SqlWarehousePermissionState{
+			state := SqlWarehousePermissionState{
 				WarehouseID:          warehouseID,
 				WarehouseName:        warehouseName,
 				UserName:             entry.UserName,
 				GroupName:            entry.GroupName,
 				ServicePrincipalName: entry.ServicePrincipalName,
 				PermissionLevel:      level,
-				Exist:                true,
-			}}, nil
+			}
+			state.SetExist(true)
+			return state, nil
 		}
 	}
 
-	dsc.Logger.Infof(dsc.MsgNotFound, "SqlWarehousePermission", principalType+"="+principalName+" warehouse_id="+warehouseID)
-	return &dsc.GetResult{ActualState: SqlWarehousePermissionState{
-		WarehouseID:          warehouseID,
-		WarehouseName:        warehouseName,
-		UserName:             req.UserName,
-		GroupName:            req.GroupName,
-		ServicePrincipalName: req.ServicePrincipalName,
-		Exist:                false,
-	}}, nil
+	dsc.Logger.Infof(MsgNotFound, "SqlWarehousePermission", principalType+"="+principalName+" warehouse_id="+warehouseID)
+	return dsc.NotFound(notFoundState(), "SqlWarehousePermission",
+		principalType+"="+principalName, "warehouse_id="+warehouseID)
 }
 
-func (h *SqlWarehousePermissionHandler) Set(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.SetResult, error) {
-	req, err := dsc.UnmarshalInput[SqlWarehousePermissionSchemaInput](input)
-	if err != nil {
-		return nil, err
+func (h *SqlWarehousePermissionHandler) Set(ctx context.Context, desired SqlWarehousePermissionState) (SqlWarehousePermissionState, error) {
+	if err := validateWarehousePermissionIdentity(&desired); err != nil {
+		return desired, err
 	}
-	if err := dsc.ValidateAtLeastOne("warehouse_id or warehouse_name", req.WarehouseID, req.WarehouseName); err != nil {
-		return nil, err
-	}
-	if err := dsc.ValidateAtLeastOne("user_name, group_name, or service_principal_name", req.UserName, req.GroupName, req.ServicePrincipalName); err != nil {
-		return nil, err
-	}
-	if err := dsc.ValidateRequired(dsc.RequiredField{Name: "permission_level", Value: req.PermissionLevel}); err != nil {
-		return nil, err
+	if err := requireFields(field{"permission_level", desired.PermissionLevel}); err != nil {
+		return desired, err
 	}
 
-	// Capture before state.
-	beforeResult, _ := h.Get(ctx, input)
-	var beforeState SqlWarehousePermissionState
-	if beforeResult != nil {
-		if s, ok := beforeResult.ActualState.(SqlWarehousePermissionState); ok {
-			beforeState = s
-		}
-	}
-
-	cmdCtx, w, err := getWorkspaceClient(ctx)
+	w, err := workspaceClient()
 	if err != nil {
-		return nil, err
+		return desired, err
 	}
 
 	// Resolve warehouse ID.
-	warehouseID := req.WarehouseID
-	if warehouseID == "" && req.WarehouseName != "" {
-		info, err := w.Warehouses.GetByName(cmdCtx, req.WarehouseName)
+	warehouseID := desired.WarehouseID
+	if warehouseID == "" {
+		info, err := w.Warehouses.GetByName(ctx, desired.WarehouseName)
 		if err != nil {
-			return nil, fmt.Errorf("SQL warehouse not found by name=%s: %w", req.WarehouseName, err)
+			return desired, fmt.Errorf("SQL warehouse not found by name=%s: %w", desired.WarehouseName, err)
 		}
 		warehouseID = info.Id
 	}
 
-	principalType, principalName := req.principalKey()
-	dsc.Logger.Infof(dsc.MsgPut, "SqlWarehousePermission", principalType+"="+principalName+" warehouse_id="+warehouseID+" permission_level="+req.PermissionLevel)
+	principalType, principalName := desired.principalKey()
+	dsc.Logger.Infof(MsgPut, "SqlWarehousePermission", principalType+"="+principalName+" warehouse_id="+warehouseID+" permission_level="+desired.PermissionLevel)
 
 	// PATCH (UpdatePermissions) adds or updates the specific entry without
 	// disturbing other entries on the warehouse.
-	_, err = w.Warehouses.UpdatePermissions(cmdCtx, sql.WarehousePermissionsRequest{
+	_, err = w.Warehouses.UpdatePermissions(ctx, sql.WarehousePermissionsRequest{
 		WarehouseId: warehouseID,
 		AccessControlList: []sql.WarehouseAccessControlRequest{{
-			UserName:             req.UserName,
-			GroupName:            req.GroupName,
-			ServicePrincipalName: req.ServicePrincipalName,
-			PermissionLevel:      sql.WarehousePermissionLevel(req.PermissionLevel),
+			UserName:             desired.UserName,
+			GroupName:            desired.GroupName,
+			ServicePrincipalName: desired.ServicePrincipalName,
+			PermissionLevel:      sql.WarehousePermissionLevel(desired.PermissionLevel),
 		}},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to update SQL warehouse permissions: %w", err)
+		return desired, fmt.Errorf("failed to update SQL warehouse permissions: %w", err)
 	}
 
-	// Capture after state.
-	afterResult, _ := h.Get(ctx, input)
-	var afterState SqlWarehousePermissionState
-	if afterResult != nil {
-		if s, ok := afterResult.ActualState.(SqlWarehousePermissionState); ok {
-			afterState = s
-		}
-	}
-
-	changedProps := dsc.CompareAllStates(beforeState, afterState)
-
-	return &dsc.SetResult{
-		BeforeState:       beforeState,
-		AfterState:        afterState,
-		ChangedProperties: changedProps,
-	}, nil
+	return h.Get(ctx, desired)
 }
 
-func (h *SqlWarehousePermissionHandler) Test(ctx dsc.ResourceContext, input json.RawMessage) (*dsc.TestResult, error) {
-	req, err := dsc.UnmarshalInput[SqlWarehousePermissionSchemaInput](input)
-	if err != nil {
-		return nil, err
-	}
-
-	result, err := h.Get(ctx, input)
-	if err != nil {
-		return nil, err
-	}
-
-	actualState := result.ActualState
-	desiredState := SqlWarehousePermissionState{
-		WarehouseID:          req.WarehouseID,
-		WarehouseName:        req.WarehouseName,
-		UserName:             req.UserName,
-		GroupName:            req.GroupName,
-		ServicePrincipalName: req.ServicePrincipalName,
-		PermissionLevel:      req.PermissionLevel,
-		Exist:                true,
-	}
-
-	differing := dsc.CompareStates(desiredState, actualState)
-	inDesiredState := len(differing) == 0
-
-	return &dsc.TestResult{
-		DesiredState:        desiredState,
-		ActualState:         actualState,
-		InDesiredState:      inDesiredState,
-		DifferingProperties: differing,
-	}, nil
-}
-
-func (h *SqlWarehousePermissionHandler) Delete(ctx dsc.ResourceContext, input json.RawMessage) error {
-	req, err := dsc.UnmarshalInput[SqlWarehousePermissionSchemaInput](input)
-	if err != nil {
-		return err
-	}
-	if err := dsc.ValidateAtLeastOne("warehouse_id or warehouse_name", req.WarehouseID, req.WarehouseName); err != nil {
-		return err
-	}
-	if err := dsc.ValidateAtLeastOne("user_name, group_name, or service_principal_name", req.UserName, req.GroupName, req.ServicePrincipalName); err != nil {
+func (h *SqlWarehousePermissionHandler) Delete(ctx context.Context, in SqlWarehousePermissionState) error {
+	if err := validateWarehousePermissionIdentity(&in); err != nil {
 		return err
 	}
 
-	cmdCtx, w, err := getWorkspaceClient(ctx)
+	w, err := workspaceClient()
 	if err != nil {
 		return err
 	}
 
 	// Resolve warehouse ID.
-	warehouseID := req.WarehouseID
-	if warehouseID == "" && req.WarehouseName != "" {
-		info, lookupErr := w.Warehouses.GetByName(cmdCtx, req.WarehouseName)
+	warehouseID := in.WarehouseID
+	if warehouseID == "" {
+		info, lookupErr := w.Warehouses.GetByName(ctx, in.WarehouseName)
 		if lookupErr != nil {
 			return nil // Warehouse not found — nothing to delete.
 		}
 		warehouseID = info.Id
 	}
 
-	principalType, principalName := req.principalKey()
-	dsc.Logger.Debugf(dsc.MsgDelete, "SqlWarehousePermission", principalType+"="+principalName+" warehouse_id="+warehouseID)
+	principalType, principalName := in.principalKey()
+	dsc.Logger.Debugf(MsgDelete, "SqlWarehousePermission", principalType+"="+principalName+" warehouse_id="+warehouseID)
 
 	// GET current permissions so we can rebuild the list without the target entry.
-	perms, err := w.Warehouses.GetPermissions(cmdCtx, sql.GetWarehousePermissionsRequest{WarehouseId: warehouseID})
+	perms, err := w.Warehouses.GetPermissions(ctx, sql.GetWarehousePermissionsRequest{WarehouseId: warehouseID})
 	if err != nil {
 		return nil // Cannot read permissions — nothing to delete.
 	}
@@ -324,7 +223,7 @@ func (h *SqlWarehousePermissionHandler) Delete(ctx dsc.ResourceContext, input js
 	// Build a new ACL list containing all direct permissions except the one being removed.
 	var filtered []sql.WarehouseAccessControlRequest
 	for _, entry := range perms.AccessControlList {
-		if matchesWarehousePrincipal(entry, &req) {
+		if matchesWarehousePrincipal(entry, &in) {
 			continue
 		}
 		level := directWarehousePermissionLevel(entry)
@@ -340,28 +239,28 @@ func (h *SqlWarehousePermissionHandler) Delete(ctx dsc.ResourceContext, input js
 	}
 
 	// PUT (SetPermissions) replaces all direct permissions with the filtered list.
-	_, err = w.Warehouses.SetPermissions(cmdCtx, sql.WarehousePermissionsRequest{
+	_, err = w.Warehouses.SetPermissions(ctx, sql.WarehousePermissionsRequest{
 		WarehouseId:       warehouseID,
 		AccessControlList: filtered,
 	})
 	return err
 }
 
-func (h *SqlWarehousePermissionHandler) Export(ctx dsc.ResourceContext) ([]any, error) {
-	cmdCtx, w, err := getWorkspaceClient(ctx)
+func (h *SqlWarehousePermissionHandler) Export(ctx context.Context, _ SqlWarehousePermissionState) ([]SqlWarehousePermissionState, error) {
+	w, err := workspaceClient()
 	if err != nil {
 		return nil, err
 	}
 
-	dsc.Logger.Debugf(dsc.MsgListAll, "SqlWarehousePermission")
-	warehouses, err := w.Warehouses.ListAll(cmdCtx, sql.ListWarehousesRequest{})
+	dsc.Logger.Debugf(MsgListAll, "SqlWarehousePermission")
+	warehouses, err := w.Warehouses.ListAll(ctx, sql.ListWarehousesRequest{})
 	if err != nil {
 		return nil, err
 	}
 
-	var all []any
+	var all []SqlWarehousePermissionState
 	for _, wh := range warehouses {
-		perms, err := w.Warehouses.GetPermissions(cmdCtx, sql.GetWarehousePermissionsRequest{WarehouseId: wh.Id})
+		perms, err := w.Warehouses.GetPermissions(ctx, sql.GetWarehousePermissionsRequest{WarehouseId: wh.Id})
 		if err != nil {
 			continue
 		}
@@ -370,15 +269,16 @@ func (h *SqlWarehousePermissionHandler) Export(ctx dsc.ResourceContext) ([]any, 
 			if level == "" {
 				continue
 			}
-			all = append(all, SqlWarehousePermissionState{
+			state := SqlWarehousePermissionState{
 				WarehouseID:          wh.Id,
 				WarehouseName:        wh.Name,
 				UserName:             entry.UserName,
 				GroupName:            entry.GroupName,
 				ServicePrincipalName: entry.ServicePrincipalName,
 				PermissionLevel:      level,
-				Exist:                true,
-			})
+			}
+			state.SetExist(true)
+			all = append(all, state)
 		}
 	}
 
