@@ -11,7 +11,7 @@ import (
 // GroupState represents the full state of a Databricks group.
 type GroupState struct {
 	dsc.ExistProperty
-	DisplayName  string             `json:"display_name" description:"String that represents a human-readable group name."`
+	DisplayName  string             `json:"display_name" dsc:"optional" description:"String that represents a human-readable group name. Required when creating a group; either id or display_name identifies an existing one."`
 	ExternalID   string             `json:"external_id,omitempty" description:"External ID used to identify the group in an external system."`
 	ID           string             `json:"id,omitempty" description:"Databricks group ID."`
 	Entitlements []UserComplexValue `json:"entitlements,omitempty" description:"Entitlements assigned to the group."`

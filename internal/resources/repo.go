@@ -220,6 +220,21 @@ func (h *RepoHandler) Delete(ctx context.Context, in RepoState) error {
 	return w.Repos.DeleteByRepoId(ctx, current.ID)
 }
 
+// repoResponseToState converts a Repos API GetRepoResponse to RepoState. Used
+// by Export, which enriches workspace REPO objects with their Git metadata.
+func repoResponseToState(r *workspace.GetRepoResponse) RepoState {
+	state := RepoState{
+		ID:           r.Id,
+		Path:         r.Path,
+		URL:          r.Url,
+		Provider:     r.Provider,
+		Branch:       r.Branch,
+		HeadCommitID: r.HeadCommitId,
+	}
+	state.SetExist(true)
+	return state
+}
+
 func (h *RepoHandler) Export(ctx context.Context, _ RepoState) ([]RepoState, error) {
 	w, err := workspaceClient()
 	if err != nil {
@@ -227,14 +242,33 @@ func (h *RepoHandler) Export(ctx context.Context, _ RepoState) ([]RepoState, err
 	}
 
 	logDebugf(MsgListAll, "Repo")
-	repos, err := w.Repos.ListAll(ctx, workspace.ListReposRequest{})
-	if err != nil {
-		return nil, err
+	var all []RepoState
+	var walk func(path string) error
+	walk = func(path string) error {
+		objects, err := w.Workspace.ListAll(ctx, workspace.ListWorkspaceRequest{Path: path})
+		if err != nil {
+			logDebugf(MsgSkipping, "Repo", "path="+path, err)
+			return nil
+		}
+		for i := range objects {
+			switch objects[i].ObjectType {
+			case workspace.ObjectTypeRepo:
+				info, err := w.Repos.GetByRepoId(ctx, objects[i].ObjectId)
+				if err != nil {
+					logDebugf(MsgSkipping, "Repo", "path="+objects[i].Path, err)
+					continue
+				}
+				all = append(all, repoResponseToState(info))
+			case workspace.ObjectTypeDirectory:
+				if err := walk(objects[i].Path); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
 	}
-
-	all := make([]RepoState, 0, len(repos))
-	for i := range repos {
-		all = append(all, repoInfoToState(&repos[i]))
+	if err := walk("/"); err != nil {
+		return nil, err
 	}
 	return all, nil
 }

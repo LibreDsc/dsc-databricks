@@ -55,6 +55,19 @@
 
 ### Bug Fixes
 
+- **Group `display_name` is no longer schema-required.** The handler always
+  accepted either `id` or `display_name` to identify a group, but the schema
+  marked `display_name` required, so the DSC engine rejected id-only input
+  (e.g. `dsc resource get` by `id`) with a `Schema: "display_name" is a
+  required property` error before the handler ran. `display_name` is now
+  optional (still always emitted in output and still required when creating a
+  group).
+- **Repo export no longer uses the deprecated `Repos.ListAll`.** As of
+  databricks-sdk-go v0.163.0 that method is deprecated because it omits
+  Git-CLI-enabled repos. Export now walks the Workspace API tree, collecting
+  every `REPO` object and enriching it with Git metadata via the Repos API;
+  subtrees the caller cannot list are skipped rather than failing the export.
+
 ### Dependency Updates
 
 - Bumped `github.com/databricks/databricks-sdk-go` from v0.118.0 to v0.163.0.

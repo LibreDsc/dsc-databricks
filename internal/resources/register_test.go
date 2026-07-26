@@ -27,7 +27,7 @@ var testableResources = []string{
 var expectedRequired = map[string][]string{
 	"LibreDsc.Databricks/User":                   {"user_name"},
 	"LibreDsc.Databricks/AccountUser":            {"user_name"},
-	"LibreDsc.Databricks/Group":                  {"display_name"},
+	"LibreDsc.Databricks/Group":                  {}, // id OR display_name identifies a group; neither is unconditionally required
 	"LibreDsc.Databricks/ServicePrincipal":       {"display_name"},
 	"LibreDsc.Databricks/Catalog":                {"name"},
 	"LibreDsc.Databricks/Cluster":                {},
