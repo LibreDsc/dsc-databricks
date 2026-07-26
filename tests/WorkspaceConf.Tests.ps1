@@ -33,7 +33,7 @@ Describe 'Databricks WorkspaceConf Resource' -Tag 'Databricks', 'WorkspaceConf' 
             $result.capabilities | Should -Contain 'set'
             $result.capabilities | Should -Contain 'delete'
             $result.capabilities | Should -Contain 'export'
-            $result.capabilities | Should -Contain 'whatIf'
+            $result.capabilities | Should -Contain 'setWhatIf'
         }
     }
 

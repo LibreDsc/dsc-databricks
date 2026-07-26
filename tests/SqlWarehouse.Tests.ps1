@@ -51,7 +51,7 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
             $result.capabilities | Should -Contain 'set'
             $result.capabilities | Should -Contain 'delete'
             $result.capabilities | Should -Contain 'export'
-            $result.capabilities | Should -Contain 'whatIf'
+            $result.capabilities | Should -Contain 'setWhatIf'
         }
     }
 
@@ -253,7 +253,7 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
             $result.capabilities | Should -Contain 'set'
             $result.capabilities | Should -Contain 'delete'
             $result.capabilities | Should -Contain 'export'
-            $result.capabilities | Should -Contain 'whatIf'
+            $result.capabilities | Should -Contain 'setWhatIf'
         }
     }
 

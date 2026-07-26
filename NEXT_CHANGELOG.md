@@ -11,7 +11,9 @@
   computed natively by each resource (no API calls that modify anything),
   so it is more accurate than the DSC engine's synthetic fallback and does
   not leak `_metadata` into `changedProperties`. `dsc resource list` shows
-  the new `whatIf` capability on all 15 resources.
+  the new `setWhatIf` capability on all 15 resources. What-if is advertised
+  via a `whatIfArg` on the `set` method (requires DSC v3.2 or later),
+  replacing the deprecated dedicated `whatIf` operation.
 - **Log messages can now be translated.** Diagnostic output (shown with
   `DSC_TRACE_LEVEL=info` or higher) goes through a localization layer.
   Set `DSC_DATABRICKS_LANG` (or rely on `LC_ALL`/`LANG`) to pick a
@@ -55,6 +57,14 @@
 
 ### Dependency Updates
 
+- Bumped `github.com/databricks/databricks-sdk-go` from v0.118.0 to v0.163.0.
+- Bumped `github.com/LibreDsc/dsc-go-rdk` to v0.2.0, which advertises native
+  what-if through a `whatIfArg` on `set` instead of the deprecated dedicated
+  `whatIf` manifest method (see
+  [PowerShell/DSC#1361](https://github.com/PowerShell/DSC/issues/1361);
+  requires DSC v3.2+).
+  Resource handlers are unchanged — only manifest generation and the
+  `dsc resource list` capability name (`whatIf` → `setWhatIf`) differ.
 - Added `github.com/LibreDsc/dsc-go-rdk` v0.1.0 and promoted
   `golang.org/x/text` to a direct dependency; removed `spf13/cobra` and
   `spf13/pflag`. Go toolchain bumped to 1.26.
