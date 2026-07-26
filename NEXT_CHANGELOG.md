@@ -62,6 +62,16 @@
   required property` error before the handler ran. `display_name` is now
   optional (still always emitted in output and still required when creating a
   group).
+- **Repo lookup by path works again.** The Repos list API now serves
+  canonical `/Workspace/Repos/...` paths, so the SDK's `GetByPath` (a
+  client-side exact-string match over the full repo list) no longer found
+  repos requested by their legacy `/Repos/...` path. Get treated existing
+  repos as missing, which made branch-only `set` runs fail with
+  `missing required field(s): url, provider` and export report paths that
+  didn't match the requested form. Repo Get now resolves the path
+  server-side (workspace `get-status`, which accepts both forms) and fetches
+  the repo by id; Get and Export echo the caller's/tree-walk path form so no
+  spurious `path` diffs appear.
 - **Repo export no longer uses the deprecated `Repos.ListAll`.** As of
   databricks-sdk-go v0.163.0 that method is deprecated because it omits
   Git-CLI-enabled repos. Export now walks the Workspace API tree, collecting
