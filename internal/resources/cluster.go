@@ -29,11 +29,14 @@ type ClusterState struct {
 	InstancePoolID         string            `json:"instance_pool_id,omitempty" description:"ID of the instance pool the cluster belongs to."`
 	DriverInstancePoolID   string            `json:"driver_instance_pool_id,omitempty" description:"ID of the instance pool for the driver node."`
 	RuntimeEngine          string            `json:"runtime_engine,omitempty" description:"Runtime engine: STANDARD or PHOTON."`
+	Kind                   string            `json:"kind,omitempty" enum:"CLASSIC_PREVIEW" description:"The kind of compute described by this specification. CLASSIC_PREVIEW enables next-generation cluster features such as is_single_node."`
+	AzureAvailability      string            `json:"azure_availability,omitempty" enum:"SPOT_AZURE,ON_DEMAND_AZURE,SPOT_WITH_FALLBACK_AZURE" description:"Azure availability type for cluster nodes. SPOT_WITH_FALLBACK_AZURE falls back to on-demand when spot capacity is unavailable."`
 	NumWorkers             int               `json:"num_workers,omitempty" description:"Number of worker nodes. Mutually exclusive with autoscale."`
 	AutoscaleMinWorkers    int               `json:"autoscale_min_workers,omitempty" description:"Minimum number of workers when autoscaling is enabled."`
 	AutoscaleMaxWorkers    int               `json:"autoscale_max_workers,omitempty" description:"Maximum number of workers when autoscaling is enabled."`
 	AutoterminationMinutes int               `json:"autotermination_minutes,omitempty" description:"Minutes of inactivity before the cluster auto-terminates. 0 disables."`
 	EnableElasticDisk      bool              `json:"enable_elastic_disk,omitempty" description:"Enable autoscaling local storage."`
+	IsSingleNode           bool              `json:"is_single_node,omitempty" description:"Create a single-node cluster (no workers). Can only be used when kind is CLASSIC_PREVIEW."`
 }
 
 func clusterConfig() dsc.ResourceConfig {
@@ -75,6 +78,11 @@ func clusterToState(c *compute.ClusterDetails) ClusterState {
 		DriverInstancePoolID:   c.DriverInstancePoolId,
 		EnableElasticDisk:      c.EnableElasticDisk,
 		RuntimeEngine:          string(c.RuntimeEngine),
+		Kind:                   string(c.Kind),
+		IsSingleNode:           c.IsSingleNode,
+	}
+	if c.AzureAttributes != nil {
+		s.AzureAvailability = string(c.AzureAttributes.Availability)
 	}
 	if c.Autoscale != nil {
 		s.AutoscaleMinWorkers = c.Autoscale.MinWorkers
@@ -134,12 +142,21 @@ func buildCreateRequest(input *ClusterState) compute.CreateCluster {
 		InstancePoolId:         input.InstancePoolID,
 		DriverInstancePoolId:   input.DriverInstancePoolID,
 		EnableElasticDisk:      input.EnableElasticDisk,
+		IsSingleNode:           input.IsSingleNode,
 	}
 	if input.DataSecurityMode != "" {
 		req.DataSecurityMode = compute.DataSecurityMode(input.DataSecurityMode)
 	}
 	if input.RuntimeEngine != "" {
 		req.RuntimeEngine = compute.RuntimeEngine(input.RuntimeEngine)
+	}
+	if input.Kind != "" {
+		req.Kind = compute.Kind(input.Kind)
+	}
+	if input.AzureAvailability != "" {
+		req.AzureAttributes = &compute.AzureAttributes{
+			Availability: compute.AzureAvailability(input.AzureAvailability),
+		}
 	}
 	if input.AutoscaleMinWorkers > 0 || input.AutoscaleMaxWorkers > 0 {
 		req.Autoscale = &compute.AutoScale{
@@ -170,12 +187,21 @@ func buildEditRequest(clusterID string, input *ClusterState, effectiveName strin
 		InstancePoolId:         input.InstancePoolID,
 		DriverInstancePoolId:   input.DriverInstancePoolID,
 		EnableElasticDisk:      input.EnableElasticDisk,
+		IsSingleNode:           input.IsSingleNode,
 	}
 	if input.DataSecurityMode != "" {
 		req.DataSecurityMode = compute.DataSecurityMode(input.DataSecurityMode)
 	}
 	if input.RuntimeEngine != "" {
 		req.RuntimeEngine = compute.RuntimeEngine(input.RuntimeEngine)
+	}
+	if input.Kind != "" {
+		req.Kind = compute.Kind(input.Kind)
+	}
+	if input.AzureAvailability != "" {
+		req.AzureAttributes = &compute.AzureAttributes{
+			Availability: compute.AzureAvailability(input.AzureAvailability),
+		}
 	}
 	if input.AutoscaleMinWorkers > 0 || input.AutoscaleMaxWorkers > 0 {
 		req.Autoscale = &compute.AutoScale{
@@ -305,6 +331,15 @@ func projectClusterUpdate(desired, current *ClusterState) ClusterState {
 	}
 	if desired.RuntimeEngine != "" {
 		projected.RuntimeEngine = desired.RuntimeEngine
+	}
+	if desired.Kind != "" {
+		projected.Kind = desired.Kind
+	}
+	if desired.AzureAvailability != "" {
+		projected.AzureAvailability = desired.AzureAvailability
+	}
+	if desired.IsSingleNode {
+		projected.IsSingleNode = true
 	}
 	if desired.AutoterminationMinutes > 0 {
 		projected.AutoterminationMinutes = desired.AutoterminationMinutes

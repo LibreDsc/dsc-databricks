@@ -24,6 +24,14 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
         # Configurable via environment variables.
         # DATABRICKS_WAREHOUSE_CLUSTER_SIZE – e.g. 2X-Small (default)
         $script:clusterSize = if ($env:DATABRICKS_WAREHOUSE_CLUSTER_SIZE) { $env:DATABRICKS_WAREHOUSE_CLUSTER_SIZE } else { '2X-Small' }
+
+        $script:warehouseBaseProperties = @{
+            cluster_size              = $script:clusterSize
+            warehouse_type            = 'PRO'
+            enable_serverless_compute = $true
+            min_num_clusters          = 1
+            max_num_clusters          = 1
+        }
     }
 
     AfterAll {
@@ -106,13 +114,10 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
 
     Context 'Set Operation - Create' -Tag 'Set', 'Create' {
         It 'should create a new SQL warehouse and wait for RUNNING state' {
-            $inputJson = @{
+            $inputJson = ($script:warehouseBaseProperties + @{
                 name           = $script:testWarehouseName
-                cluster_size   = $script:clusterSize
                 auto_stop_mins = 10
-                min_num_clusters = 1
-                max_num_clusters = 1
-            } | ConvertTo-Json -Compress
+            }) | ConvertTo-Json -Compress
 
             $result = dsc resource set -r LibreDsc.Databricks/SqlWarehouse --input $inputJson | ConvertFrom-Json
             $LASTEXITCODE | Should -Be 0
@@ -121,6 +126,7 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
             $result.afterState.id | Should -Not -BeNullOrEmpty
             $result.afterState.state | Should -Be 'RUNNING'
             $result.afterState.cluster_size | Should -Be $script:clusterSize
+            $result.afterState.enable_serverless_compute | Should -Be $true
             $result.changedProperties | Should -Contain 'id'
             $script:testWarehouseId = $result.afterState.id
         }
@@ -149,14 +155,11 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
         }
 
         It 'should update the auto_stop_mins' {
-            $inputJson = @{
+            $inputJson = ($script:warehouseBaseProperties + @{
                 id             = $script:testWarehouseId
                 name           = $script:testWarehouseName
-                cluster_size   = $script:clusterSize
                 auto_stop_mins = 20
-                min_num_clusters = 1
-                max_num_clusters = 1
-            } | ConvertTo-Json -Compress
+            }) | ConvertTo-Json -Compress
 
             $result = dsc resource set -r LibreDsc.Databricks/SqlWarehouse --input $inputJson | ConvertFrom-Json
             $LASTEXITCODE | Should -Be 0
@@ -205,14 +208,11 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
         }
 
         It 'should update a stopped warehouse without restarting it' {
-            $inputJson = @{
+            $inputJson = ($script:warehouseBaseProperties + @{
                 id             = $script:testWarehouseId
                 name           = $script:testWarehouseName
-                cluster_size   = $script:clusterSize
                 auto_stop_mins = 30
-                min_num_clusters = 1
-                max_num_clusters = 1
-            } | ConvertTo-Json -Compress
+            }) | ConvertTo-Json -Compress
 
             $result = dsc resource set -r LibreDsc.Databricks/SqlWarehouse --input $inputJson | ConvertFrom-Json
             $LASTEXITCODE | Should -Be 0
@@ -563,13 +563,10 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
             if (-not $script:testWarehouseId) { return }
 
             $script:idempotentWarehouseName = New-TestSqlWarehouseName
-            $inputJson = @{
+            $inputJson = ($script:warehouseBaseProperties + @{
                 name           = $script:idempotentWarehouseName
-                cluster_size   = $script:clusterSize
                 auto_stop_mins = 10
-                min_num_clusters = 1
-                max_num_clusters = 1
-            } | ConvertTo-Json -Compress
+            }) | ConvertTo-Json -Compress
             $createResult = dsc resource set -r LibreDsc.Databricks/SqlWarehouse --input $inputJson | ConvertFrom-Json
             $script:idempotentWarehouseId = $createResult.afterState.id
         }
@@ -588,14 +585,11 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
 
         It 'should be idempotent when set is called with the same desired state' {
             if (-not $script:idempotentWarehouseId) { Set-ItResult -Skipped -Because 'the idempotency warehouse fixture was not created' }
-            $inputJson = @{
+            $inputJson = ($script:warehouseBaseProperties + @{
                 id             = $script:idempotentWarehouseId
                 name           = $script:idempotentWarehouseName
-                cluster_size   = $script:clusterSize
                 auto_stop_mins = 10
-                min_num_clusters = 1
-                max_num_clusters = 1
-            } | ConvertTo-Json -Compress
+            }) | ConvertTo-Json -Compress
 
             $result = dsc resource set -r LibreDsc.Databricks/SqlWarehouse --input $inputJson | ConvertFrom-Json
             $LASTEXITCODE | Should -Be 0

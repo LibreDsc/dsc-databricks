@@ -23,21 +23,19 @@ Describe 'Databricks Cluster Resource' -Tag 'Databricks', 'Cluster' -Skip:(!$scr
 
         # Use environment variables or sensible defaults for cluster config.
         # DATABRICKS_NODE_TYPE_ID   – e.g. Standard_D4ds_v5
-        # DATABRICKS_SPARK_VERSION  – e.g. 15.4.x-scala2.12
+        # DATABRICKS_SPARK_VERSION  – e.g. 19.x-scala2.13
         $script:nodeTypeId    = if ($env:DATABRICKS_NODE_TYPE_ID)   { $env:DATABRICKS_NODE_TYPE_ID }   else { 'Standard_D4ds_v5' }
-        $script:sparkVersion  = if ($env:DATABRICKS_SPARK_VERSION)  { $env:DATABRICKS_SPARK_VERSION }  else { '15.4.x-scala2.12' }
+        $script:sparkVersion  = if ($env:DATABRICKS_SPARK_VERSION)  { $env:DATABRICKS_SPARK_VERSION }  else { '19.x-scala2.13' }
 
-        # Proper single-node cluster configuration. A 0-worker cluster without
-        # the singleNode profile still resolves a worker environment it never
-        # uses, which can terminate the cluster with 'WorkerEnv not found in
-        # central' on freshly provisioned workspaces.
-        $script:singleNodeSparkConf = @{
-            'spark.databricks.cluster.profile' = 'singleNode'
-            'spark.master'                     = 'local[*]'
-        }
-        $script:singleNodeTags = @{
-            dsc_test      = 'true'
-            ResourceClass = 'SingleNode'
+        $script:clusterBaseProperties = @{
+            spark_version         = $script:sparkVersion
+            node_type_id          = $script:nodeTypeId
+            kind                  = 'CLASSIC_PREVIEW'
+            runtime_engine        = 'PHOTON'
+            azure_availability    = 'SPOT_WITH_FALLBACK_AZURE'
+            autoscale_min_workers = 1
+            autoscale_max_workers = 2
+            custom_tags           = @{ dsc_test = 'true' }
         }
     }
 
@@ -106,6 +104,9 @@ Describe 'Databricks Cluster Resource' -Tag 'Databricks', 'Cluster' -Skip:(!$scr
             $result.properties.custom_tags | Should -Not -BeNullOrEmpty
             $result.properties.data_security_mode | Should -Not -BeNullOrEmpty
             $result.properties.runtime_engine | Should -Not -BeNullOrEmpty
+            $result.properties.kind | Should -Not -BeNullOrEmpty
+            $result.properties.azure_availability | Should -Not -BeNullOrEmpty
+            $result.properties.is_single_node | Should -Not -BeNullOrEmpty
         }
     }
 
@@ -125,22 +126,17 @@ Describe 'Databricks Cluster Resource' -Tag 'Databricks', 'Cluster' -Skip:(!$scr
 
     Context 'Set Operation - Create' -Tag 'Set', 'Create' {
         It 'should create a new cluster and wait for RUNNING state' {
-            $inputJson = @{
+            $inputJson = ($script:clusterBaseProperties + @{
                 cluster_name            = $script:testClusterName
-                spark_version           = $script:sparkVersion
-                node_type_id            = $script:nodeTypeId
-                num_workers             = 0
                 autotermination_minutes = 10
-                spark_conf              = $script:singleNodeSparkConf
-                custom_tags             = $script:singleNodeTags
-            } | ConvertTo-Json -Compress
+            }) | ConvertTo-Json -Compress
 
             # Cluster provisioning on a fresh workspace can fail transiently
             # (e.g. 'WorkerEnv not found in central' while the backend seeds);
             # retry with growing backoff after removing the terminated carcass
             # (a plain retry would otherwise find the existing cluster and
             # take the edit path).
-            for ($attempt = 1; $attempt -le 5; $attempt++) {
+            for ($attempt = 1; $attempt -le 6; $attempt++) {
                 $result = dsc resource set -r LibreDsc.Databricks/Cluster --input $inputJson | ConvertFrom-Json
                 $setExitCode = $LASTEXITCODE
                 if ($setExitCode -eq 0) { break }
@@ -167,6 +163,8 @@ Describe 'Databricks Cluster Resource' -Tag 'Databricks', 'Cluster' -Skip:(!$scr
             $result.actualState.cluster_name | Should -Be $script:testClusterName
             $result.actualState.spark_version | Should -Be $script:sparkVersion
             $result.actualState.node_type_id | Should -Be $script:nodeTypeId
+            $result.actualState.kind | Should -Be 'CLASSIC_PREVIEW'
+            $result.actualState.azure_availability | Should -Be 'SPOT_WITH_FALLBACK_AZURE'
         }
 
         It 'should report state as RUNNING after creation' {
@@ -183,16 +181,11 @@ Describe 'Databricks Cluster Resource' -Tag 'Databricks', 'Cluster' -Skip:(!$scr
         }
 
         It 'should update the autotermination_minutes' {
-            $inputJson = @{
+            $inputJson = ($script:clusterBaseProperties + @{
                 cluster_id              = $script:testClusterId
                 cluster_name            = $script:testClusterName
-                spark_version           = $script:sparkVersion
-                node_type_id            = $script:nodeTypeId
-                num_workers             = 0
                 autotermination_minutes = 20
-                spark_conf              = $script:singleNodeSparkConf
-                custom_tags             = $script:singleNodeTags
-            } | ConvertTo-Json -Compress
+            }) | ConvertTo-Json -Compress
 
             $result = dsc resource set -r LibreDsc.Databricks/Cluster --input $inputJson | ConvertFrom-Json
             $LASTEXITCODE | Should -Be 0
@@ -248,16 +241,11 @@ Describe 'Databricks Cluster Resource' -Tag 'Databricks', 'Cluster' -Skip:(!$scr
         }
 
         It 'should update a terminated cluster without restarting it' {
-            $inputJson = @{
+            $inputJson = ($script:clusterBaseProperties + @{
                 cluster_id              = $script:testClusterId
                 cluster_name            = $script:testClusterName
-                spark_version           = $script:sparkVersion
-                node_type_id            = $script:nodeTypeId
-                num_workers             = 0
                 autotermination_minutes = 30
-                spark_conf              = $script:singleNodeSparkConf
-                custom_tags             = $script:singleNodeTags
-            } | ConvertTo-Json -Compress
+            }) | ConvertTo-Json -Compress
 
             $result = dsc resource set -r LibreDsc.Databricks/Cluster --input $inputJson | ConvertFrom-Json
             $LASTEXITCODE | Should -Be 0
@@ -354,13 +342,10 @@ Describe 'Databricks Cluster Resource' -Tag 'Databricks', 'Cluster' -Skip:(!$scr
             if (-not $script:testClusterId) { return }
 
             $script:idempotentClusterName = New-TestClusterName
-            $inputJson = @{
+            $inputJson = ($script:clusterBaseProperties + @{
                 cluster_name            = $script:idempotentClusterName
-                spark_version           = $script:sparkVersion
-                node_type_id            = $script:nodeTypeId
-                num_workers             = 0
                 autotermination_minutes = 10
-            } | ConvertTo-Json -Compress
+            }) | ConvertTo-Json -Compress
             $createResult = dsc resource set -r LibreDsc.Databricks/Cluster --input $inputJson | ConvertFrom-Json
             $script:idempotentClusterId = $createResult.afterState.cluster_id
         }
@@ -379,14 +364,11 @@ Describe 'Databricks Cluster Resource' -Tag 'Databricks', 'Cluster' -Skip:(!$scr
 
         It 'should be idempotent when set is called with the same desired state' {
             if (-not $script:idempotentClusterId) { Set-ItResult -Skipped -Because 'the idempotency cluster fixture was not created' }
-            $inputJson = @{
+            $inputJson = ($script:clusterBaseProperties + @{
                 cluster_id              = $script:idempotentClusterId
                 cluster_name            = $script:idempotentClusterName
-                spark_version           = $script:sparkVersion
-                node_type_id            = $script:nodeTypeId
-                num_workers             = 0
                 autotermination_minutes = 10
-            } | ConvertTo-Json -Compress
+            }) | ConvertTo-Json -Compress
 
             $result = dsc resource set -r LibreDsc.Databricks/Cluster --input $inputJson | ConvertFrom-Json
             $LASTEXITCODE | Should -Be 0

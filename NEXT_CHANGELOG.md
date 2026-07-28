@@ -64,6 +64,17 @@
   `DATABRICKS_CATALOG_STORAGE_LOCATION` when the metastore has no default
   managed storage; a per-catalog subdirectory is used so storage locations
   never overlap.
+- **For contributors: serverless SQL warehouse fixture.** The SqlWarehouse
+  E2E suite now provisions a serverless PRO warehouse — it starts in
+  seconds and consumes no Azure VM quota. The previous classic warehouse
+  launches on a different VM family than the cluster suite's node type and
+  could spend the entire 20-minute wait in `Clusters are failing to
+  launch` when that family had no capacity or quota in the region.
+
+- **Cluster supports next-generation compute.** New optional properties
+  `kind` (enum `CLASSIC_PREVIEW`), `is_single_node` (only valid with
+  `kind = CLASSIC_PREVIEW`), and `azure_availability` (enum `SPOT_AZURE`,
+  `ON_DEMAND_AZURE`, `SPOT_WITH_FALLBACK_AZURE`).
 
 ### Bug Fixes
 
