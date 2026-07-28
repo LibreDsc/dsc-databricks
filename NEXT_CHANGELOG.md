@@ -52,6 +52,18 @@
   projections, localization, manifest/schema parity) and Pester `WhatIf`
   contexts in every suite via the new `Invoke-DscWhatIf` helper;
   SqlWarehousePermission is covered inline in the SqlWarehouse suite.
+- **For contributors: Unity Catalog test environment.** Groundwork for the
+  upcoming Unity Catalog object resources:
+  `tools/Initialize-DatabricksTests.ps1` gains `Test-UnityCatalogAvailable`
+  (metastore-attachment detection; UC suites skip on workspaces that are not
+  UC-enabled), `New-UnityCatalogTestEnvironment` /
+  `Remove-UnityCatalogTestEnvironment` (tear up / tear down a dedicated
+  catalog + schema fixture through the Unity Catalog REST API, with
+  force-delete cascade on teardown), a `New-TestSchemaName` generator, and an
+  `Invoke-DatabricksApi` REST helper. Set
+  `DATABRICKS_CATALOG_STORAGE_LOCATION` when the metastore has no default
+  managed storage; a per-catalog subdirectory is used so storage locations
+  never overlap.
 
 ### Bug Fixes
 

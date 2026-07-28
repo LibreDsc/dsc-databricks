@@ -183,6 +183,15 @@ function New-TestCatalogName
     return "dsc_test_catalog_$(Get-Random -Minimum 10000 -Maximum 99999)"
 }
 
+function New-TestSchemaName
+{
+    <#
+    .SYNOPSIS
+        Generates a unique name for a test Unity Catalog schema.
+    #>
+    return "dsc_test_schema_$(Get-Random -Minimum 10000 -Maximum 99999)"
+}
+
 function New-TestRepoPath
 {
     <#
@@ -200,4 +209,177 @@ function New-TestAccountUserName
         Generates a unique account user name (email) for testing.
     #>
     return "dsc-test-acctuser-$(Get-Random -Minimum 10000 -Maximum 99999)@example.com"
+}
+
+function Invoke-DatabricksApi
+{
+    <#
+    .SYNOPSIS
+        Calls the Databricks REST API using DATABRICKS_HOST/DATABRICKS_TOKEN.
+    .DESCRIPTION
+        Internal helper for test fixture provisioning that must not depend on
+        the DSC resources under test. Throws on HTTP errors.
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [ValidateSet('GET', 'POST', 'PATCH', 'DELETE')]
+        [System.String]
+        $Method,
+
+        [Parameter(Mandatory)]
+        [System.String]
+        $Path,
+
+        [Parameter()]
+        [System.Collections.Hashtable]
+        $Body
+    )
+
+    $params = @{
+        Uri     = "$($env:DATABRICKS_HOST.TrimEnd('/'))$Path"
+        Method  = $Method
+        Headers = @{ Authorization = "Bearer $env:DATABRICKS_TOKEN" }
+    }
+    if ($Body)
+    {
+        $params.ContentType = 'application/json'
+        $params.Body = $Body | ConvertTo-Json -Depth 10 -Compress
+    }
+
+    return Invoke-RestMethod @params
+}
+
+function Test-UnityCatalogAvailable
+{
+    <#
+    .SYNOPSIS
+        Checks whether the workspace is attached to a Unity Catalog metastore.
+    .DESCRIPTION
+        Step 1 of the Unity Catalog setup guide: a workspace is UC-enabled
+        when a metastore is attached. Attaching one requires an account admin
+        and cannot be automated with a workspace token, so Unity Catalog test
+        suites skip (not fail) when this returns $false. The result is cached
+        for the lifetime of the (dot-sourced) script scope.
+    #>
+    [CmdletBinding()]
+    param ()
+
+    if ($null -ne $script:_unityCatalogAvailable)
+    {
+        return $script:_unityCatalogAvailable
+    }
+
+    try
+    {
+        $summary = Invoke-DatabricksApi -Method GET -Path '/api/2.1/unity-catalog/metastore_summary'
+        $script:_unityCatalogAvailable = [bool]$summary.metastore_id
+    }
+    catch
+    {
+        $script:_unityCatalogAvailable = $false
+    }
+
+    if (-not $script:_unityCatalogAvailable)
+    {
+        Write-Warning 'Workspace is not attached to a Unity Catalog metastore. Skipping Unity Catalog tests.'
+    }
+
+    return $script:_unityCatalogAvailable
+}
+
+function New-UnityCatalogTestEnvironment
+{
+    <#
+    .SYNOPSIS
+        Tears up the shared Unity Catalog fixture (catalog + schema) for a suite.
+    .DESCRIPTION
+        Creates a uniquely named catalog with one schema inside it via the
+        Unity Catalog REST API, for Unity Catalog object suites (Schema,
+        Volume, ...) to use as their parent fixture. Call from BeforeAll and
+        pass the returned object to Remove-UnityCatalogTestEnvironment in
+        AfterAll.
+
+        Managed data goes to the metastore's default managed storage. If the
+        metastore has none, set DATABRICKS_CATALOG_STORAGE_LOCATION; a
+        per-catalog subdirectory is appended because managed storage
+        locations must not overlap between catalogs.
+
+        Returns $null when the environment cannot be provisioned (callers
+        should skip their tests).
+    #>
+    [CmdletBinding()]
+    param ()
+
+    if (-not (Test-UnityCatalogAvailable))
+    {
+        return $null
+    }
+
+    $catalogName = New-TestCatalogName
+    $schemaName = New-TestSchemaName
+    $comment = 'DSC E2E test environment (safe to delete)'
+
+    $catalogBody = @{
+        name    = $catalogName
+        comment = $comment
+    }
+    if ($env:DATABRICKS_CATALOG_STORAGE_LOCATION)
+    {
+        $catalogBody.storage_root = "$($env:DATABRICKS_CATALOG_STORAGE_LOCATION.TrimEnd('/'))/$catalogName"
+    }
+
+    try
+    {
+        Invoke-DatabricksApi -Method POST -Path '/api/2.1/unity-catalog/catalogs' -Body $catalogBody | Out-Null
+        Invoke-DatabricksApi -Method POST -Path '/api/2.1/unity-catalog/schemas' -Body @{
+            name         = $schemaName
+            catalog_name = $catalogName
+            comment      = $comment
+        } | Out-Null
+    }
+    catch
+    {
+        Write-Warning "Failed to provision Unity Catalog test environment: $_"
+        Remove-UnityCatalogTestEnvironment -Environment ([pscustomobject]@{ CatalogName = $catalogName })
+        return $null
+    }
+
+    return [pscustomobject]@{
+        CatalogName    = $catalogName
+        SchemaName     = $schemaName
+        SchemaFullName = "$catalogName.$schemaName"
+    }
+}
+
+function Remove-UnityCatalogTestEnvironment
+{
+    <#
+    .SYNOPSIS
+        Tears down a Unity Catalog fixture created by New-UnityCatalogTestEnvironment.
+    .DESCRIPTION
+        Force-deletes the fixture catalog, cascading to every schema, table,
+        and volume the suite created inside it. Safe to call with $null and
+        never throws, so AfterAll cleanup cannot mask test results.
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter()]
+        [System.Object]
+        $Environment
+    )
+
+    if (-not $Environment -or -not $Environment.CatalogName)
+    {
+        return
+    }
+
+    try
+    {
+        Invoke-DatabricksApi -Method DELETE -Path "/api/2.1/unity-catalog/catalogs/$($Environment.CatalogName)?force=true" | Out-Null
+    }
+    catch
+    {
+        Write-Warning "Failed to remove Unity Catalog test environment catalog '$($Environment.CatalogName)': $_"
+    }
 }
