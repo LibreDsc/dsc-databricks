@@ -38,19 +38,6 @@ func repoConfig() dsc.ResourceConfig {
 // equality, so no Testable is implemented — the DSC synthetic test suffices.
 type RepoHandler struct{}
 
-func repoInfoToState(r *workspace.RepoInfo) RepoState {
-	state := RepoState{
-		ID:           r.Id,
-		Path:         r.Path,
-		URL:          r.Url,
-		Provider:     r.Provider,
-		Branch:       r.Branch,
-		HeadCommitID: r.HeadCommitId,
-	}
-	state.SetExist(true)
-	return state
-}
-
 func (h *RepoHandler) Get(ctx context.Context, in RepoState) (RepoState, error) {
 	if err := requireFields(field{"path", in.Path}); err != nil {
 		return in, err
@@ -62,8 +49,8 @@ func (h *RepoHandler) Get(ctx context.Context, in RepoState) (RepoState, error) 
 	}
 
 	logDebugf(MsgLookup, "Repo", "path="+in.Path)
-	info, err := w.Repos.GetByPath(ctx, in.Path)
-	if err != nil {
+	obj, err := w.Workspace.GetStatusByPath(ctx, in.Path)
+	if err != nil || obj.ObjectType != workspace.ObjectTypeRepo {
 		logInfof(MsgNotFound, "Repo", "path="+in.Path)
 		// Echo back the requested settings so the missing state is self-describing.
 		return dsc.NotFound(RepoState{
@@ -73,7 +60,23 @@ func (h *RepoHandler) Get(ctx context.Context, in RepoState) (RepoState, error) 
 			Branch:   in.Branch,
 		}, "Repo", "path="+in.Path)
 	}
-	return repoInfoToState(info), nil
+
+	info, err := w.Repos.GetByRepoId(ctx, obj.ObjectId)
+	if err != nil {
+		logInfof(MsgNotFound, "Repo", "path="+in.Path)
+		return dsc.NotFound(RepoState{
+			Path:     in.Path,
+			URL:      in.URL,
+			Provider: in.Provider,
+			Branch:   in.Branch,
+		}, "Repo", "path="+in.Path)
+	}
+
+	state := repoResponseToState(info)
+	// Keep the caller's path form; the Repos API may report the canonical
+	// /Workspace-prefixed alias, which would show up as a spurious diff.
+	state.Path = in.Path
+	return state, nil
 }
 
 func (h *RepoHandler) Set(ctx context.Context, desired RepoState) (RepoState, error) {
@@ -111,7 +114,7 @@ func (h *RepoHandler) Set(ctx context.Context, desired RepoState) (RepoState, er
 
 		afterState := RepoState{
 			ID:           created.Id,
-			Path:         created.Path,
+			Path:         desired.Path,
 			URL:          created.Url,
 			Provider:     created.Provider,
 			Branch:       created.Branch,
@@ -220,6 +223,21 @@ func (h *RepoHandler) Delete(ctx context.Context, in RepoState) error {
 	return w.Repos.DeleteByRepoId(ctx, current.ID)
 }
 
+// repoResponseToState converts a Repos API GetRepoResponse to RepoState. Used
+// by Export, which enriches workspace REPO objects with their Git metadata.
+func repoResponseToState(r *workspace.GetRepoResponse) RepoState {
+	state := RepoState{
+		ID:           r.Id,
+		Path:         r.Path,
+		URL:          r.Url,
+		Provider:     r.Provider,
+		Branch:       r.Branch,
+		HeadCommitID: r.HeadCommitId,
+	}
+	state.SetExist(true)
+	return state
+}
+
 func (h *RepoHandler) Export(ctx context.Context, _ RepoState) ([]RepoState, error) {
 	w, err := workspaceClient()
 	if err != nil {
@@ -227,14 +245,37 @@ func (h *RepoHandler) Export(ctx context.Context, _ RepoState) ([]RepoState, err
 	}
 
 	logDebugf(MsgListAll, "Repo")
-	repos, err := w.Repos.ListAll(ctx, workspace.ListReposRequest{})
-	if err != nil {
-		return nil, err
+	var all []RepoState
+	var walk func(path string) error
+	walk = func(path string) error {
+		objects, err := w.Workspace.ListAll(ctx, workspace.ListWorkspaceRequest{Path: path})
+		if err != nil {
+			logDebugf(MsgSkipping, "Repo", "path="+path, err)
+			return nil
+		}
+		for i := range objects {
+			switch objects[i].ObjectType {
+			case workspace.ObjectTypeRepo:
+				info, err := w.Repos.GetByRepoId(ctx, objects[i].ObjectId)
+				if err != nil {
+					logDebugf(MsgSkipping, "Repo", "path="+objects[i].Path, err)
+					continue
+				}
+				state := repoResponseToState(info)
+				// Use the path from the workspace tree walk; the Repos API may
+				// report the canonical /Workspace-prefixed alias instead.
+				state.Path = objects[i].Path
+				all = append(all, state)
+			case workspace.ObjectTypeDirectory:
+				if err := walk(objects[i].Path); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
 	}
-
-	all := make([]RepoState, 0, len(repos))
-	for i := range repos {
-		all = append(all, repoInfoToState(&repos[i]))
+	if err := walk("/"); err != nil {
+		return nil, err
 	}
 	return all, nil
 }

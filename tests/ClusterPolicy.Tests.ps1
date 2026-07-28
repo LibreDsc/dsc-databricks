@@ -51,7 +51,7 @@ Describe 'Databricks ClusterPolicy Resource' -Tag 'Databricks', 'ClusterPolicy' 
             $result.capabilities | Should -Contain 'set'
             $result.capabilities | Should -Contain 'delete'
             $result.capabilities | Should -Contain 'export'
-            $result.capabilities | Should -Contain 'whatIf'
+            $result.capabilities | Should -Contain 'setWhatIf'
         }
     }
 

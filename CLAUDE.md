@@ -392,12 +392,17 @@ func (h *SecretScopeHandler) Export(ctx context.Context, _ SecretScopeState) ([]
 
 ## What-if (SetWhatIf)
 
-Every resource implements `WhatIfSettable`. The rdk then emits a `whatIf`
-manifest method automatically (`set --what-if`, return `stateAndDiff`),
-computes `changedProperties` via a before-Get + `CompareAllStates`, and the
-`dsc resource list` capabilities include `whatIf`. Note the DSC engine only
-reaches it through `dsc config set -w` with a config document — there is no
-`dsc resource set --what-if` on the engine CLI.
+Every resource implements `WhatIfSettable`. As of dsc-go-rdk v0.2.0 the rdk
+advertises what-if by appending a `whatIfArg` (`{"whatIfArg": "--what-if"}`)
+to the `set` method's args instead of emitting a separate `whatIf` method —
+this replaces the deprecated dedicated `whatIf` operation
+([PowerShell/DSC#1361](https://github.com/PowerShell/DSC/issues/1361)) and
+requires DSC v3.2 or later. The engine runs `set --what-if`, reads the
+simulated after-state from `set`'s declared return (`stateAndDiff`), and
+computes `changedProperties` via a before-Get + `CompareAllStates`. The
+`dsc resource list` capability is reported as `setWhatIf`. Note the DSC
+engine only reaches it through `dsc config set -w` with a config document —
+there is no `dsc resource set --what-if` on the engine CLI.
 
 Canonical pattern:
 
@@ -544,8 +549,9 @@ only** — no live SDK calls, no client mocking:
 - Localization (`i18n_test.go`: language resolution, catalog completeness)
 - `register_test.go` — the parity net: `RegisterAll` into a Manager, then
   assert resource count, manifest methods and returns per resource
-  (including a `whatIf` method with return `stateAndDiff` on every
-  resource), and schema invariants (`_exist` default true, expected
+  (including a `whatIfArg` (`--what-if`) entry on every resource's `set`
+  method rather than a deprecated dedicated `whatIf` method), and schema
+  invariants (`_exist` default true, expected
   `required` lists, no `additionalProperties: false`).
 
 Use table-driven tests. Run with `go test ./...`.
@@ -587,7 +593,7 @@ Describe 'Resource' -Skip:(!$script:databricksAvailable) {
 one there when a new resource needs one.
 
 **Context order per Describe:** Discovery (`dsc resource list`,
-capabilities incl. `whatIf`) → Schema Validation (`_exist` present,
+capabilities incl. `setWhatIf`) → Schema Validation (`_exist` present,
 `default: true`) → Get (missing → `_exist=false`) → Set–Create →
 Set–Update → Test → WhatIf → Export → Delete → Idempotency.
 

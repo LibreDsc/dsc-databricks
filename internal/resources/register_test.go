@@ -27,7 +27,7 @@ var testableResources = []string{
 var expectedRequired = map[string][]string{
 	"LibreDsc.Databricks/User":                   {"user_name"},
 	"LibreDsc.Databricks/AccountUser":            {"user_name"},
-	"LibreDsc.Databricks/Group":                  {"display_name"},
+	"LibreDsc.Databricks/Group":                  {}, // id OR display_name identifies a group; neither is unconditionally required
 	"LibreDsc.Databricks/ServicePrincipal":       {"display_name"},
 	"LibreDsc.Databricks/Catalog":                {"name"},
 	"LibreDsc.Databricks/Cluster":                {},
@@ -94,15 +94,16 @@ func TestManifestCapabilities(t *testing.T) {
 				t.Errorf("export method missing")
 			}
 
-			if manifest.WhatIf == nil {
-				t.Fatalf("whatIf method missing — all resources implement WhatIfSettable")
+			// As of dsc-go-rdk v0.2.0 native what-if is advertised via a
+			// whatIfArg entry in the set args (the engine appends --what-if to
+			// set in what-if mode); the deprecated dedicated whatIf method is
+			// no longer emitted. All resources implement WhatIfSettable.
+			if manifest.WhatIf != nil {
+				t.Errorf("deprecated whatIf method advertised; expected whatIfArg on set")
 			}
-			if manifest.WhatIf.Return != "stateAndDiff" {
-				t.Errorf("whatIf.return = %q, want stateAndDiff", manifest.WhatIf.Return)
-			}
-			whatIfArgs, err := json.Marshal(manifest.WhatIf.Args)
-			if err != nil || !strings.Contains(string(whatIfArgs), `"--what-if"`) {
-				t.Errorf("whatIf args = %s, want --what-if flag", whatIfArgs)
+			setArgs, err := json.Marshal(manifest.Set.Args)
+			if err != nil || !strings.Contains(string(setArgs), `"whatIfArg":"--what-if"`) {
+				t.Errorf("set args = %s, want whatIfArg --what-if entry", setArgs)
 			}
 
 			wantTest := slices.Contains(testableResources, manifest.Type)

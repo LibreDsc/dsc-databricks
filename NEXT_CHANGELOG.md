@@ -11,7 +11,9 @@
   computed natively by each resource (no API calls that modify anything),
   so it is more accurate than the DSC engine's synthetic fallback and does
   not leak `_metadata` into `changedProperties`. `dsc resource list` shows
-  the new `whatIf` capability on all 15 resources.
+  the new `setWhatIf` capability on all 15 resources. What-if is advertised
+  via a `whatIfArg` on the `set` method (requires DSC v3.2 or later),
+  replacing the deprecated dedicated `whatIf` operation.
 - **Log messages can now be translated.** Diagnostic output (shown with
   `DSC_TRACE_LEVEL=info` or higher) goes through a localization layer.
   Set `DSC_DATABRICKS_LANG` (or rely on `LC_ALL`/`LANG`) to pick a
@@ -53,8 +55,39 @@
 
 ### Bug Fixes
 
+- **Group `display_name` is no longer schema-required.** The handler always
+  accepted either `id` or `display_name` to identify a group, but the schema
+  marked `display_name` required, so the DSC engine rejected id-only input
+  (e.g. `dsc resource get` by `id`) with a `Schema: "display_name" is a
+  required property` error before the handler ran. `display_name` is now
+  optional (still always emitted in output and still required when creating a
+  group).
+- **Repo lookup by path works again.** The Repos list API now serves
+  canonical `/Workspace/Repos/...` paths, so the SDK's `GetByPath` (a
+  client-side exact-string match over the full repo list) no longer found
+  repos requested by their legacy `/Repos/...` path. Get treated existing
+  repos as missing, which made branch-only `set` runs fail with
+  `missing required field(s): url, provider` and export report paths that
+  didn't match the requested form. Repo Get now resolves the path
+  server-side (workspace `get-status`, which accepts both forms) and fetches
+  the repo by id; Get and Export echo the caller's/tree-walk path form so no
+  spurious `path` diffs appear.
+- **Repo export no longer uses the deprecated `Repos.ListAll`.** As of
+  databricks-sdk-go v0.163.0 that method is deprecated because it omits
+  Git-CLI-enabled repos. Export now walks the Workspace API tree, collecting
+  every `REPO` object and enriching it with Git metadata via the Repos API;
+  subtrees the caller cannot list are skipped rather than failing the export.
+
 ### Dependency Updates
 
+- Bumped `github.com/databricks/databricks-sdk-go` from v0.118.0 to v0.163.0.
+- Bumped `github.com/LibreDsc/dsc-go-rdk` to v0.2.0, which advertises native
+  what-if through a `whatIfArg` on `set` instead of the deprecated dedicated
+  `whatIf` manifest method (see
+  [PowerShell/DSC#1361](https://github.com/PowerShell/DSC/issues/1361);
+  requires DSC v3.2+).
+  Resource handlers are unchanged — only manifest generation and the
+  `dsc resource list` capability name (`whatIf` → `setWhatIf`) differ.
 - Added `github.com/LibreDsc/dsc-go-rdk` v0.1.0 and promoted
   `golang.org/x/text` to a direct dependency; removed `spf13/cobra` and
   `spf13/pflag`. Go toolchain bumped to 1.26.
