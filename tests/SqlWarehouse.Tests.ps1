@@ -27,11 +27,16 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
     }
 
     AfterAll {
-        if ($script:databricksAvailable -and $script:testWarehouseId)
+        if ($script:databricksAvailable -and ($script:testWarehouseId -or $script:testWarehouseName))
         {
             try
             {
-                $inputJson = @{ id = $script:testWarehouseId } | ConvertTo-Json -Compress
+                # Fall back to the name when the create failed before an id
+                # was captured — the warehouse may still have been created
+                # even though waiting for RUNNING failed.
+                $properties = if ($script:testWarehouseId) { @{ id = $script:testWarehouseId } }
+                              else { @{ name = $script:testWarehouseName } }
+                $inputJson = $properties | ConvertTo-Json -Compress
                 dsc resource delete -r LibreDsc.Databricks/SqlWarehouse --input $inputJson 2>$null | Out-Null
             }
             catch { }
@@ -121,6 +126,7 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
         }
 
         It 'should verify the created warehouse via get' {
+            if (-not $script:testWarehouseId) { Set-ItResult -Skipped -Because 'the warehouse fixture was not created' }
             $inputJson = @{ id = $script:testWarehouseId } | ConvertTo-Json -Compress
             $result = dsc resource get -r LibreDsc.Databricks/SqlWarehouse --input $inputJson | ConvertFrom-Json
             $result.actualState._exist | Should -Be $true
@@ -130,6 +136,7 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
         }
 
         It 'should report state as RUNNING after creation' {
+            if (-not $script:testWarehouseId) { Set-ItResult -Skipped -Because 'the warehouse fixture was not created' }
             $inputJson = @{ id = $script:testWarehouseId } | ConvertTo-Json -Compress
             $result = dsc resource get -r LibreDsc.Databricks/SqlWarehouse --input $inputJson | ConvertFrom-Json
             $result.actualState.state | Should -Be 'RUNNING'
@@ -137,6 +144,10 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
     }
 
     Context 'Set Operation - Update' -Tag 'Set', 'Update' {
+        BeforeEach {
+            if (-not $script:testWarehouseId) { Set-ItResult -Skipped -Because 'the warehouse fixture was not created' }
+        }
+
         It 'should update the auto_stop_mins' {
             $inputJson = @{
                 id             = $script:testWarehouseId
@@ -168,6 +179,10 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
     }
 
     Context 'State Transitions' -Tag 'State' {
+        BeforeEach {
+            if (-not $script:testWarehouseId) { Set-ItResult -Skipped -Because 'the warehouse fixture was not created' }
+        }
+
         It 'should stop the warehouse via API' {
             $baseUrl = $env:DATABRICKS_HOST.TrimEnd('/')
             $headers = @{ Authorization = "Bearer $env:DATABRICKS_TOKEN"; 'Content-Type' = 'application/json' }
@@ -209,6 +224,10 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
     }
 
     Context 'Get by name' -Tag 'Get' {
+        BeforeEach {
+            if (-not $script:testWarehouseId) { Set-ItResult -Skipped -Because 'the warehouse fixture was not created' }
+        }
+
         It 'should find the warehouse by name' {
             $inputJson = @{ name = $script:testWarehouseName } | ConvertTo-Json -Compress
             $result = dsc resource get -r LibreDsc.Databricks/SqlWarehouse --input $inputJson | ConvertFrom-Json
@@ -219,6 +238,10 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
     }
 
     Context 'Export Operation' -Tag 'Export' {
+        BeforeEach {
+            if (-not $script:testWarehouseId) { Set-ItResult -Skipped -Because 'the warehouse fixture was not created' }
+        }
+
         It 'should export warehouses and include the test warehouse' {
             $result = dsc resource export -r LibreDsc.Databricks/SqlWarehouse | ConvertFrom-Json
             $result | Should -Not -BeNullOrEmpty
@@ -283,6 +306,10 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
     }
 
     Context 'SqlWarehousePermission - Get Operation' -Tag 'Get', 'SqlWarehousePermission' {
+        BeforeEach {
+            if (-not $script:testWarehouseId) { Set-ItResult -Skipped -Because 'the warehouse fixture was not created' }
+        }
+
         It 'should return _exist=false for a non-existent permission' {
             $inputJson = @{
                 warehouse_id = $script:testWarehouseId
@@ -295,6 +322,10 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
     }
 
     Context 'SqlWarehousePermission - Set Operation - Create' -Tag 'Set', 'SqlWarehousePermission' {
+        BeforeEach {
+            if (-not $script:testWarehouseId) { Set-ItResult -Skipped -Because 'the warehouse fixture was not created' }
+        }
+
         It 'should grant CAN_USE to the users group' {
             $inputJson = @{
                 warehouse_id     = $script:testWarehouseId
@@ -323,6 +354,10 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
     }
 
     Context 'SqlWarehousePermission - Set Operation - Update' -Tag 'Set', 'SqlWarehousePermission' {
+        BeforeEach {
+            if (-not $script:testWarehouseId) { Set-ItResult -Skipped -Because 'the warehouse fixture was not created' }
+        }
+
         It 'should update permission from CAN_USE to CAN_MONITOR' {
             $inputJson = @{
                 warehouse_id     = $script:testWarehouseId
@@ -348,6 +383,10 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
     }
 
     Context 'SqlWarehousePermission - Get by warehouse name' -Tag 'Get', 'SqlWarehousePermission' {
+        BeforeEach {
+            if (-not $script:testWarehouseId) { Set-ItResult -Skipped -Because 'the warehouse fixture was not created' }
+        }
+
         It 'should find the permission by warehouse name' {
             $inputJson = @{
                 warehouse_name = $script:testWarehouseName
@@ -362,6 +401,10 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
     }
 
     Context 'SqlWarehousePermission - Export Operation' -Tag 'Export', 'SqlWarehousePermission' {
+        BeforeEach {
+            if (-not $script:testWarehouseId) { Set-ItResult -Skipped -Because 'the warehouse fixture was not created' }
+        }
+
         It 'should export permissions including the test permission' {
             $result = dsc resource export -r LibreDsc.Databricks/SqlWarehousePermission | ConvertFrom-Json
             $result | Should -Not -BeNullOrEmpty
@@ -376,6 +419,10 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
     }
 
     Context 'SqlWarehousePermission - WhatIf Operation' -Tag 'WhatIf', 'SqlWarehousePermission' {
+        BeforeEach {
+            if (-not $script:testWarehouseId) { Set-ItResult -Skipped -Because 'the warehouse fixture was not created' }
+        }
+
         It 'should predict a permission grant without applying it' {
             $result = Invoke-DscWhatIf -ResourceType 'LibreDsc.Databricks/SqlWarehousePermission' -Properties @{
                 warehouse_id     = $script:testWarehouseId
@@ -400,6 +447,10 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
     }
 
     Context 'SqlWarehousePermission - Delete Operation' -Tag 'Delete', 'SqlWarehousePermission' {
+        BeforeEach {
+            if (-not $script:testWarehouseId) { Set-ItResult -Skipped -Because 'the warehouse fixture was not created' }
+        }
+
         It 'should delete the permission' {
             $inputJson = @{
                 warehouse_id = $script:testWarehouseId
@@ -423,6 +474,8 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
 
     Context 'SqlWarehousePermission - Idempotency' -Tag 'Idempotency', 'SqlWarehousePermission' {
         BeforeAll {
+            if (-not $script:testWarehouseId) { return }
+
             $inputJson = @{
                 warehouse_id     = $script:testWarehouseId
                 group_name       = 'users'
@@ -447,6 +500,7 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
         }
 
         It 'should be idempotent when set is called with the same desired state' {
+            if (-not $script:testWarehouseId) { Set-ItResult -Skipped -Because 'the warehouse fixture was not created' }
             $inputJson = @{
                 warehouse_id     = $script:testWarehouseId
                 group_name       = 'users'
@@ -461,6 +515,10 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
     }
 
     Context 'WhatIf Operation' -Tag 'WhatIf' {
+        BeforeEach {
+            if (-not $script:testWarehouseId) { Set-ItResult -Skipped -Because 'the warehouse fixture was not created' }
+        }
+
         It 'should predict an auto stop change without applying it' {
             $result = Invoke-DscWhatIf -ResourceType 'LibreDsc.Databricks/SqlWarehouse' -Properties @{
                 id             = $script:testWarehouseId
@@ -481,6 +539,10 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
     }
 
     Context 'Delete Operation' -Tag 'Delete' {
+        BeforeEach {
+            if (-not $script:testWarehouseId) { Set-ItResult -Skipped -Because 'the warehouse fixture was not created' }
+        }
+
         It 'should delete the warehouse' {
             $inputJson = @{ id = $script:testWarehouseId } | ConvertTo-Json -Compress
             dsc resource delete -r LibreDsc.Databricks/SqlWarehouse --input $inputJson | Out-Null
@@ -496,6 +558,10 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
 
     Context 'Idempotency' -Tag 'Idempotency' {
         BeforeAll {
+            # If the main fixture never reached RUNNING, the workspace cannot
+            # launch warehouse compute — don't burn another 20-minute wait.
+            if (-not $script:testWarehouseId) { return }
+
             $script:idempotentWarehouseName = New-TestSqlWarehouseName
             $inputJson = @{
                 name           = $script:idempotentWarehouseName
@@ -521,6 +587,7 @@ Describe 'Databricks SQL Warehouse Resource' -Tag 'Databricks', 'SqlWarehouse' -
         }
 
         It 'should be idempotent when set is called with the same desired state' {
+            if (-not $script:idempotentWarehouseId) { Set-ItResult -Skipped -Because 'the idempotency warehouse fixture was not created' }
             $inputJson = @{
                 id             = $script:idempotentWarehouseId
                 name           = $script:idempotentWarehouseName

@@ -42,11 +42,14 @@ Describe 'Databricks Cluster Resource' -Tag 'Databricks', 'Cluster' -Skip:(!$scr
     }
 
     AfterAll {
-        if ($script:databricksAvailable -and $script:testClusterId)
+        if ($script:databricksAvailable -and ($script:testClusterId -or $script:testClusterName))
         {
             try
             {
-                $inputJson = @{ cluster_id = $script:testClusterId } | ConvertTo-Json -Compress
+                # Fall back to the name when the create failed before an id
+                $properties = if ($script:testClusterId) { @{ cluster_id = $script:testClusterId } }
+                              else { @{ cluster_name = $script:testClusterName } }
+                $inputJson = $properties | ConvertTo-Json -Compress
                 dsc resource delete -r LibreDsc.Databricks/Cluster --input $inputJson 2>$null | Out-Null
             }
             catch { }
@@ -132,10 +135,12 @@ Describe 'Databricks Cluster Resource' -Tag 'Databricks', 'Cluster' -Skip:(!$scr
                 custom_tags             = $script:singleNodeTags
             } | ConvertTo-Json -Compress
 
-            # Cluster provisioning on a fresh workspace can fail transiently;
-            # retry after removing the terminated carcass (a plain retry would
-            # otherwise find the existing cluster and take the edit path).
-            for ($attempt = 1; $attempt -le 3; $attempt++) {
+            # Cluster provisioning on a fresh workspace can fail transiently
+            # (e.g. 'WorkerEnv not found in central' while the backend seeds);
+            # retry with growing backoff after removing the terminated carcass
+            # (a plain retry would otherwise find the existing cluster and
+            # take the edit path).
+            for ($attempt = 1; $attempt -le 5; $attempt++) {
                 $result = dsc resource set -r LibreDsc.Databricks/Cluster --input $inputJson | ConvertFrom-Json
                 $setExitCode = $LASTEXITCODE
                 if ($setExitCode -eq 0) { break }
@@ -143,7 +148,7 @@ Describe 'Databricks Cluster Resource' -Tag 'Databricks', 'Cluster' -Skip:(!$scr
                 Write-Warning "Cluster create attempt $attempt failed with exit code $setExitCode; cleaning up and retrying."
                 $cleanupJson = @{ cluster_name = $script:testClusterName } | ConvertTo-Json -Compress
                 dsc resource delete -r LibreDsc.Databricks/Cluster --input $cleanupJson 2>$null | Out-Null
-                Start-Sleep -Seconds 30
+                Start-Sleep -Seconds (30 * $attempt)
             }
             $setExitCode | Should -Be 0
             $result.afterState._exist | Should -Be $true
@@ -155,6 +160,7 @@ Describe 'Databricks Cluster Resource' -Tag 'Databricks', 'Cluster' -Skip:(!$scr
         }
 
         It 'should verify the created cluster via get' {
+            if (-not $script:testClusterId) { Set-ItResult -Skipped -Because 'the cluster fixture was not created' }
             $inputJson = @{ cluster_id = $script:testClusterId } | ConvertTo-Json -Compress
             $result = dsc resource get -r LibreDsc.Databricks/Cluster --input $inputJson | ConvertFrom-Json
             $result.actualState._exist | Should -Be $true
@@ -164,6 +170,7 @@ Describe 'Databricks Cluster Resource' -Tag 'Databricks', 'Cluster' -Skip:(!$scr
         }
 
         It 'should report state as RUNNING after creation' {
+            if (-not $script:testClusterId) { Set-ItResult -Skipped -Because 'the cluster fixture was not created' }
             $inputJson = @{ cluster_id = $script:testClusterId } | ConvertTo-Json -Compress
             $result = dsc resource get -r LibreDsc.Databricks/Cluster --input $inputJson | ConvertFrom-Json
             $result.actualState.state | Should -Be 'RUNNING'
@@ -171,6 +178,10 @@ Describe 'Databricks Cluster Resource' -Tag 'Databricks', 'Cluster' -Skip:(!$scr
     }
 
     Context 'Set Operation - Update' -Tag 'Set', 'Update' {
+        BeforeEach {
+            if (-not $script:testClusterId) { Set-ItResult -Skipped -Because 'the cluster fixture was not created' }
+        }
+
         It 'should update the autotermination_minutes' {
             $inputJson = @{
                 cluster_id              = $script:testClusterId
@@ -204,6 +215,10 @@ Describe 'Databricks Cluster Resource' -Tag 'Databricks', 'Cluster' -Skip:(!$scr
     }
 
     Context 'State Transitions' -Tag 'State' {
+        BeforeEach {
+            if (-not $script:testClusterId) { Set-ItResult -Skipped -Because 'the cluster fixture was not created' }
+        }
+
         It 'should terminate the cluster via delete (non-permanent)' {
             $baseUrl = $env:DATABRICKS_HOST.TrimEnd('/')
             $headers = @{ Authorization = "Bearer $env:DATABRICKS_TOKEN"; 'Content-Type' = 'application/json' }
@@ -254,6 +269,10 @@ Describe 'Databricks Cluster Resource' -Tag 'Databricks', 'Cluster' -Skip:(!$scr
     }
 
     Context 'Get by cluster_name' -Tag 'Get' {
+        BeforeEach {
+            if (-not $script:testClusterId) { Set-ItResult -Skipped -Because 'the cluster fixture was not created' }
+        }
+
         It 'should find the cluster by name' {
             $inputJson = @{ cluster_name = $script:testClusterName } | ConvertTo-Json -Compress
             $result = dsc resource get -r LibreDsc.Databricks/Cluster --input $inputJson | ConvertFrom-Json
@@ -264,6 +283,10 @@ Describe 'Databricks Cluster Resource' -Tag 'Databricks', 'Cluster' -Skip:(!$scr
     }
 
     Context 'Export Operation' -Tag 'Export' {
+        BeforeEach {
+            if (-not $script:testClusterId) { Set-ItResult -Skipped -Because 'the cluster fixture was not created' }
+        }
+
         It 'should export clusters and include the test cluster' {
             $result = dsc resource export -r LibreDsc.Databricks/Cluster | ConvertFrom-Json
             $result | Should -Not -BeNullOrEmpty
@@ -283,6 +306,10 @@ Describe 'Databricks Cluster Resource' -Tag 'Databricks', 'Cluster' -Skip:(!$scr
     }
 
     Context 'WhatIf Operation' -Tag 'WhatIf' {
+        BeforeEach {
+            if (-not $script:testClusterId) { Set-ItResult -Skipped -Because 'the cluster fixture was not created' }
+        }
+
         It 'should predict an autotermination change without applying it' {
             $result = Invoke-DscWhatIf -ResourceType 'LibreDsc.Databricks/Cluster' -Properties @{
                 cluster_id              = $script:testClusterId
@@ -303,6 +330,10 @@ Describe 'Databricks Cluster Resource' -Tag 'Databricks', 'Cluster' -Skip:(!$scr
     }
 
     Context 'Delete Operation' -Tag 'Delete' {
+        BeforeEach {
+            if (-not $script:testClusterId) { Set-ItResult -Skipped -Because 'the cluster fixture was not created' }
+        }
+
         It 'should permanently delete the cluster' {
             $inputJson = @{ cluster_id = $script:testClusterId } | ConvertTo-Json -Compress
             dsc resource delete -r LibreDsc.Databricks/Cluster --input $inputJson | Out-Null
@@ -318,6 +349,10 @@ Describe 'Databricks Cluster Resource' -Tag 'Databricks', 'Cluster' -Skip:(!$scr
 
     Context 'Idempotency' -Tag 'Idempotency' {
         BeforeAll {
+            # If the main fixture never launched, the workspace cannot start
+            # compute — don't burn time on another doomed create.
+            if (-not $script:testClusterId) { return }
+
             $script:idempotentClusterName = New-TestClusterName
             $inputJson = @{
                 cluster_name            = $script:idempotentClusterName
@@ -343,6 +378,7 @@ Describe 'Databricks Cluster Resource' -Tag 'Databricks', 'Cluster' -Skip:(!$scr
         }
 
         It 'should be idempotent when set is called with the same desired state' {
+            if (-not $script:idempotentClusterId) { Set-ItResult -Skipped -Because 'the idempotency cluster fixture was not created' }
             $inputJson = @{
                 cluster_id              = $script:idempotentClusterId
                 cluster_name            = $script:idempotentClusterName

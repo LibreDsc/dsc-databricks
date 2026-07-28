@@ -17,6 +17,7 @@ const (
 	MsgAlreadyExists = "%s: %s already exists"
 	MsgPut           = "%s: setting %s"
 	MsgSkipping      = "%s: skipping %s: %s"
+	MsgSettingUnset  = "%s: %s has never been written; using its server-side default"
 )
 
 // What-if messages: emitted by SetWhatIf instead of the mutating message.

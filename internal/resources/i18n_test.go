@@ -72,7 +72,7 @@ func TestLocalizeEnglishPassThrough(t *testing.T) {
 func TestCatalogCompleteness(t *testing.T) {
 	allMessages := []string{
 		MsgLookup, MsgNotFound, MsgUpdate, MsgCreate, MsgDelete, MsgListAll,
-		MsgAlreadyExists, MsgPut, MsgSkipping,
+		MsgAlreadyExists, MsgPut, MsgSkipping, MsgSettingUnset,
 		MsgWhatIfCreate, MsgWhatIfUpdate, MsgWhatIfPut,
 		MsgCreatingWorkspaceClient, MsgCreatingAccountClient,
 	}

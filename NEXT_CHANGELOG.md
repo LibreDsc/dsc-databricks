@@ -67,6 +67,15 @@
 
 ### Bug Fixes
 
+- **WorkspaceSetting `get` no longer fails on never-written settings.** On a
+  fresh workspace, settings that have never been written (e.g.
+  `default_namespace`) return 404 from the settings API, which Get treated
+  as a fatal error (exit code 2). Get now reports such a setting at its
+  server-side default — `_exist: true` with an explicit empty `value` and no
+  `etag` — and Set tolerates the missing etag on its pre-read so the first
+  write goes through (updates already send `allow_missing`). As part of
+  this, `value` is now always present in Get output (empty string when
+  unset) instead of being omitted.
 - **Group `display_name` is no longer schema-required.** The handler always
   accepted either `id` or `display_name` to identify a group, but the schema
   marked `display_name` required, so the DSC engine rejected id-only input

@@ -7,6 +7,7 @@ import (
 
 	dsc "github.com/LibreDsc/dsc-go-rdk"
 	"github.com/databricks/databricks-sdk-go"
+	"github.com/databricks/databricks-sdk-go/apierr"
 	"github.com/databricks/databricks-sdk-go/service/settings"
 )
 
@@ -14,7 +15,9 @@ import (
 type WorkspaceSettingState struct {
 	dsc.ExistProperty
 	SettingName string `json:"setting_name" description:"Name of the workspace setting. Valid values: aibi_dashboard_embedding_access_policy, automatic_cluster_update, compliance_security_profile, dashboard_email_subscriptions, default_namespace, default_warehouse_id, disable_legacy_access, disable_legacy_dbfs, enable_export_notebook, enable_notebook_table_clipboard, enable_results_downloading, enhanced_security_monitoring, llm_proxy_partner_powered, restrict_workspace_admins, sql_results_download."`
-	Value       string `json:"value,omitempty" description:"The setting value. For boolean settings use 'true' or 'false'. For string settings use the string value. For enum settings use the enum constant (e.g. ALLOW_ALL, RESTRICT_TOKENS_AND_JOB_RUN_AS, ALLOW_APPROVED_DOMAINS)."`
+	// value is always serialized (no omitempty) so a never-written setting
+	// reads back as an explicit empty string
+	Value string `json:"value" dsc:"optional" description:"The setting value. For boolean settings use 'true' or 'false'. For string settings use the string value. For enum settings use the enum constant (e.g. ALLOW_ALL, RESTRICT_TOKENS_AND_JOB_RUN_AS, ALLOW_APPROVED_DOMAINS)."`
 	Etag        string `json:"etag,omitempty" description:"Etag for optimistic concurrency control. Populated on read, used for updates. (read-only)"`
 }
 
@@ -449,6 +452,15 @@ var settingRegistry = map[string]settingDef{
 	},
 }
 
+// settingDefaultState returns the state of a setting that has never been
+// written on the workspace. The setting still exists (settings cannot be
+// absent, only unset), so _exist is true with an empty value and no etag.
+func settingDefaultState(name string) WorkspaceSettingState {
+	state := WorkspaceSettingState{SettingName: name}
+	state.SetExist(true)
+	return state
+}
+
 // allSettingNames returns the list of supported setting names for export.
 func allSettingNames() []string {
 	names := make([]string, 0, len(settingRegistry))
@@ -476,8 +488,14 @@ func (h *WorkspaceSettingHandler) Get(ctx context.Context, in WorkspaceSettingSt
 	logDebugf(MsgLookup, "WorkspaceSetting", "setting_name="+in.SettingName)
 	value, etag, err := def.get(ctx, w)
 	if err != nil {
-		// Settings always exist on a workspace; an error here is a real error
-		// (e.g. permission denied), not a not-found.
+		if apierr.IsMissing(err) {
+			// Settings that were never written (e.g. default_namespace on a
+			// fresh workspace) return 404 from the settings API. The setting
+			// still exists at its server-side default.
+			logInfof(MsgSettingUnset, "WorkspaceSetting", "setting_name="+in.SettingName)
+			return settingDefaultState(in.SettingName), nil
+		}
+		// Any other error (e.g. permission denied) is a real error.
 		return in, err
 	}
 
@@ -507,7 +525,12 @@ func (h *WorkspaceSettingHandler) Set(ctx context.Context, desired WorkspaceSett
 	// Read the current etag for optimistic concurrency.
 	_, etag, err := def.get(ctx, w)
 	if err != nil {
-		return desired, fmt.Errorf("failed to read current setting: %w", err)
+		if !apierr.IsMissing(err) {
+			return desired, fmt.Errorf("failed to read current setting: %w", err)
+		}
+		// Never-written setting: no etag exists yet. Updates send
+		// AllowMissing, so an empty etag performs the first write.
+		etag = ""
 	}
 
 	logInfof(MsgUpdate, "WorkspaceSetting", "setting_name="+desired.SettingName)
