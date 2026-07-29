@@ -35,6 +35,13 @@
 
 ### Bug Fixes
 
+- **Repo lookup and export work on newer workspace generations.** Some
+  workspace shards report Git folders with a directory object type instead
+  of `REPO` in the workspace `get-status`/`list` APIs, which made Repo `get`
+  treat existing repos as missing (breaking branch-only `set` runs with
+  `missing required field(s): url, provider`) and export return nothing.
+
+
 ### Dependency Updates
 
 - Bumped `github.com/databricks/databricks-sdk-go` from v0.163.0 to

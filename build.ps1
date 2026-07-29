@@ -118,7 +118,15 @@ if ($RunTests)
             }
             $env:DATABRICKS_ACCESS_CONNECTOR_ID = $connector.Id
 
-            $principalId = $connector.Identity.PrincipalId
+            $principalId = $connector.Identity.PrincipalId ?? $connector.IdentityPrincipalId
+            if (-not $principalId) {
+                Start-Sleep -Seconds 15
+                $connector = Get-AzDatabricksAccessConnector -ResourceGroupName $rgName -Name 'dsc-ci-access-connector'
+                $principalId = $connector.Identity.PrincipalId ?? $connector.IdentityPrincipalId
+            }
+            if (-not $principalId) {
+                throw "Access connector managed identity principal id could not be resolved from $($connector | ConvertTo-Json -Depth 3 -Compress)"
+            }
             $assigned = Get-AzRoleAssignment -ObjectId $principalId -Scope $storageAccount.Id -ErrorAction Ignore |
                 Where-Object RoleDefinitionName -eq 'Storage Blob Data Contributor'
             if (-not $assigned) {

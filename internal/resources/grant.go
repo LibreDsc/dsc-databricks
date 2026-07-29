@@ -14,10 +14,10 @@ import (
 // single Unity Catalog securable.
 type GrantState struct {
 	dsc.ExistProperty
-	Privileges    []string `json:"privileges,omitempty" description:"Privileges the principal holds directly on the securable (e.g. USE_CATALOG, SELECT, ALL_PRIVILEGES). Order-insensitive. Required for set."`
 	SecurableType string   `json:"securable_type" description:"Type of the securable (lowercase)." enum:"catalog,clean_room,connection,credential,external_location,external_metadata,function,metastore,pipeline,provider,recipient,schema,share,staging_table,storage_credential,table,volume"`
 	FullName      string   `json:"full_name" description:"Full name of the securable (e.g. 'main', 'main.default', or 'main.default.my_table')."`
 	Principal     string   `json:"principal" description:"User email, group name, or service principal application ID the privileges are granted to."`
+	Privileges    []string `json:"privileges,omitempty" description:"Privileges the principal holds directly on the securable (e.g. USE_CATALOG, SELECT, ALL_PRIVILEGES). Order-insensitive. Required for set."`
 }
 
 // grantKey renders the identifying triple for log messages.
