@@ -78,6 +78,76 @@ if ($RunTests)
         $resourceGroup = Get-AzResourceGroup | Select-Object -First 1
         $databricksInstance = Get-AzDatabricksWorkspace -ResourceGroupName $resourceGroup.ResourceGroupName | Select-Object -First 1
 
+        # --- Unity Catalog storage bootstrap -------------------------------
+        # Persistent, reuse-if-exists infrastructure for the UC storage
+        # suites: an ADLS Gen2 storage account with two containers ('managed'
+        # for catalog storage roots, 'external' for the ExternalLocation
+        # suite's own locations), a Databricks Access Connector, and a
+        # Storage Blob Data Contributor role assignment for the connector's
+        # system-assigned identity. Runs before workspace creation so RBAC
+        # has the workspace provisioning + warm-up time to propagate. On any
+        # failure the storage-dependent suites skip instead of failing.
+        try {
+            $rgName = $resourceGroup.ResourceGroupName
+
+            # Deterministic, globally unique-ish storage account name
+            # (3-24 chars, lowercase alphanumerics only).
+            $hashInput = "$rgName/$((Get-AzContext).Subscription.Id)"
+            $sha = [System.Security.Cryptography.SHA256]::HashData([System.Text.Encoding]::UTF8.GetBytes($hashInput))
+            $suffix = ([System.Convert]::ToHexString($sha)).Substring(0, 12).ToLowerInvariant()
+            $storageAccountName = "dscdbx$suffix"
+
+            $storageAccount = Get-AzStorageAccount -ResourceGroupName $rgName -Name $storageAccountName -ErrorAction Ignore
+            if (-not $storageAccount) {
+                Write-Verbose -Message "Creating ADLS Gen2 storage account $storageAccountName..."
+                $storageAccount = New-AzStorageAccount -ResourceGroupName $rgName -Name $storageAccountName `
+                    -Location $resourceGroup.Location -SkuName Standard_LRS -Kind StorageV2 `
+                    -EnableHierarchicalNamespace $true -MinimumTlsVersion TLS1_2
+            }
+            foreach ($containerName in 'managed', 'external') {
+                if (-not (Get-AzStorageContainer -Name $containerName -Context $storageAccount.Context -ErrorAction Ignore)) {
+                    New-AzStorageContainer -Name $containerName -Context $storageAccount.Context | Out-Null
+                }
+            }
+
+            $connector = Get-AzDatabricksAccessConnector -ResourceGroupName $rgName -Name 'dsc-ci-access-connector' -ErrorAction Ignore
+            if (-not $connector) {
+                Write-Verbose -Message 'Creating Databricks access connector dsc-ci-access-connector...'
+                $connector = New-AzDatabricksAccessConnector -ResourceGroupName $rgName -Name 'dsc-ci-access-connector' `
+                    -Location $resourceGroup.Location -IdentityType 'SystemAssigned'
+            }
+            $env:DATABRICKS_ACCESS_CONNECTOR_ID = $connector.Id
+
+            $principalId = $connector.Identity.PrincipalId ?? $connector.IdentityPrincipalId
+            if (-not $principalId) {
+                Start-Sleep -Seconds 15
+                $connector = Get-AzDatabricksAccessConnector -ResourceGroupName $rgName -Name 'dsc-ci-access-connector'
+                $principalId = $connector.Identity.PrincipalId ?? $connector.IdentityPrincipalId
+            }
+            if (-not $principalId) {
+                throw "Access connector managed identity principal id could not be resolved from $($connector | ConvertTo-Json -Depth 3 -Compress)"
+            }
+            $assigned = Get-AzRoleAssignment -ObjectId $principalId -Scope $storageAccount.Id -ErrorAction Ignore |
+                Where-Object RoleDefinitionName -eq 'Storage Blob Data Contributor'
+            if (-not $assigned) {
+                Write-Verbose -Message 'Assigning Storage Blob Data Contributor to the access connector identity...'
+                New-AzRoleAssignment -ObjectId $principalId -RoleDefinitionName 'Storage Blob Data Contributor' -Scope $storageAccount.Id | Out-Null
+            }
+
+            $env:DATABRICKS_CATALOG_STORAGE_LOCATION = "abfss://managed@$storageAccountName.dfs.core.windows.net/catalogs"
+            $env:DATABRICKS_EXTERNAL_LOCATION_URL = "abfss://external@$storageAccountName.dfs.core.windows.net"
+        }
+        catch {
+            Write-Warning "Unity Catalog storage bootstrap failed: $_"
+            # Storage-root-dependent suites (Catalog storage contexts,
+            # Schema, Volume, Grant, ExternalLocation) skip without these.
+            # DATABRICKS_ACCESS_CONNECTOR_ID stays if it was set — the
+            # credential suites only need the connector (skip_validation).
+            $env:DATABRICKS_CATALOG_STORAGE_LOCATION = $null
+            $env:DATABRICKS_EXTERNAL_LOCATION_URL = $null
+        }
+        # -------------------------------------------------------------------
+
         $workspaceCreated = $false
         if (-not $databricksInstance) {
             $params = @{

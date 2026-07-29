@@ -35,3 +35,12 @@ func requireAtLeastOne(description string, values ...string) error {
 	}
 	return dsc.NewExitCodeErrorf(dsc.ExitInvalidInput, "at least one of %s must be provided", description)
 }
+
+// requireAtLeastOneCredentialBlock returns an invalid-input error when no
+// Azure credential block is provided on a credential-style resource create.
+func requireAtLeastOneCredentialBlock(ami *AzureManagedIdentityState, asp *AzureServicePrincipalState) error {
+	if ami == nil && asp == nil {
+		return dsc.NewExitCodeErrorf(dsc.ExitInvalidInput, "at least one of azure_managed_identity or azure_service_principal must be provided")
+	}
+	return nil
+}

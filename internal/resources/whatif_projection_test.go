@@ -339,3 +339,222 @@ func TestProjectScimUpdates(t *testing.T) {
 		assertExistTrue(t, projected.Exist)
 	})
 }
+
+func TestProjectSchema(t *testing.T) {
+	t.Run("create includes deterministic full_name and chained fields", func(t *testing.T) {
+		desired := SchemaState{
+			Name:        "sales",
+			CatalogName: "main",
+			Comment:     "c",
+			Owner:       "owner@example.com",
+			StorageRoot: "abfss://x@y.dfs.core.windows.net/sales",
+		}
+		projected := projectSchemaCreate(&desired)
+		if projected.FullName != "main.sales" {
+			t.Errorf("FullName = %q, want main.sales", projected.FullName)
+		}
+		if projected.SchemaID != "" || projected.MetastoreID != "" || projected.StorageLocation != "" {
+			t.Errorf("server-computed fields must stay empty on create: %+v", projected)
+		}
+		if projected.Owner != "owner@example.com" {
+			t.Errorf("chained post-create owner must carry into projection")
+		}
+		assertExistTrue(t, projected.Exist)
+	})
+
+	t.Run("update overlays non-empty desired onto current", func(t *testing.T) {
+		current := SchemaState{
+			Name:        "sales",
+			CatalogName: "main",
+			FullName:    "main.sales",
+			Comment:     "old",
+			Owner:       "a",
+			SchemaID:    "id-1",
+			StorageRoot: "abfss://x@y.dfs.core.windows.net/sales",
+		}
+		desired := SchemaState{Name: "sales", CatalogName: "main", Comment: "new"}
+		projected := projectSchemaUpdate(&desired, &current)
+		if projected.Comment != "new" || projected.Owner != "a" || projected.SchemaID != "id-1" {
+			t.Errorf("overlay failed: %+v", projected)
+		}
+		if projected.StorageRoot != current.StorageRoot {
+			t.Errorf("create-only storage_root must carry over")
+		}
+		assertExistTrue(t, projected.Exist)
+	})
+}
+
+func TestProjectVolume(t *testing.T) {
+	t.Run("create keeps server-computed fields empty", func(t *testing.T) {
+		desired := VolumeState{
+			Name:        "vol",
+			CatalogName: "main",
+			SchemaName:  "sales",
+			VolumeType:  "MANAGED",
+			Owner:       "owner@example.com",
+		}
+		projected := projectVolumeCreate(&desired)
+		if projected.FullName != "main.sales.vol" {
+			t.Errorf("FullName = %q, want main.sales.vol", projected.FullName)
+		}
+		if projected.VolumeID != "" || projected.MetastoreID != "" {
+			t.Errorf("server-computed fields must stay empty: %+v", projected)
+		}
+		assertExistTrue(t, projected.Exist)
+	})
+
+	t.Run("update only overlays comment and owner", func(t *testing.T) {
+		current := VolumeState{
+			Name: "vol", CatalogName: "main", SchemaName: "sales",
+			VolumeType: "MANAGED", StorageLocation: "loc", VolumeID: "id-1", Comment: "old",
+		}
+		desired := VolumeState{
+			Name: "vol", CatalogName: "main", SchemaName: "sales",
+			VolumeType: "EXTERNAL", Comment: "new",
+		}
+		projected := projectVolumeUpdate(&desired, &current)
+		if projected.Comment != "new" {
+			t.Errorf("Comment = %q, want new", projected.Comment)
+		}
+		if projected.VolumeType != "MANAGED" || projected.StorageLocation != "loc" {
+			t.Errorf("create-only fields must carry over from current: %+v", projected)
+		}
+		assertExistTrue(t, projected.Exist)
+	})
+}
+
+func TestProjectStorageCredentialUpdate(t *testing.T) {
+	current := StorageCredentialState{
+		Name:     "cred",
+		Owner:    "a",
+		ReadOnly: true,
+		ID:       "id-1",
+		AzureManagedIdentity: &AzureManagedIdentityState{
+			AccessConnectorID: "ac-id",
+			CredentialID:      "cred-1",
+		},
+	}
+
+	t.Run("read_only is force-sent so desired false wins", func(t *testing.T) {
+		desired := StorageCredentialState{Name: "cred", ReadOnly: false}
+		projected := projectStorageCredentialUpdate(&desired, &current)
+		if projected.ReadOnly {
+			t.Errorf("ReadOnly must come from desired (force-sent)")
+		}
+		if projected.ID != "id-1" || projected.Owner != "a" {
+			t.Errorf("carry-over failed: %+v", projected)
+		}
+		assertExistTrue(t, projected.Exist)
+	})
+
+	t.Run("managed identity keeps server credential_id", func(t *testing.T) {
+		desired := StorageCredentialState{
+			Name:                 "cred",
+			AzureManagedIdentity: &AzureManagedIdentityState{AccessConnectorID: "ac-id"},
+		}
+		projected := projectStorageCredentialUpdate(&desired, &current)
+		if projected.AzureManagedIdentity.CredentialID != "cred-1" {
+			t.Errorf("credential_id must carry over from current")
+		}
+	})
+
+	t.Run("switching to service principal clears managed identity and secret", func(t *testing.T) {
+		desired := StorageCredentialState{
+			Name: "cred",
+			AzureServicePrincipal: &AzureServicePrincipalState{
+				ApplicationID: "app", DirectoryID: "dir", ClientSecret: "s",
+			},
+		}
+		projected := projectStorageCredentialUpdate(&desired, &current)
+		if projected.AzureManagedIdentity != nil {
+			t.Errorf("managed identity must be cleared when switching credential type")
+		}
+		if projected.AzureServicePrincipal.ClientSecret != "" {
+			t.Errorf("client_secret is write-only and must not appear in projections")
+		}
+	})
+}
+
+func TestProjectServiceCredentialCreate(t *testing.T) {
+	desired := ServiceCredentialState{
+		Name:                 "svc",
+		AzureManagedIdentity: &AzureManagedIdentityState{AccessConnectorID: "ac-id", CredentialID: "ignored"},
+	}
+
+	projected := projectServiceCredentialCreate(&desired)
+
+	if projected.Purpose != "SERVICE" {
+		t.Errorf("Purpose = %q, want SERVICE default", projected.Purpose)
+	}
+	if projected.ID != "" || projected.MetastoreID != "" {
+		t.Errorf("server-computed fields must stay empty: %+v", projected)
+	}
+	if projected.AzureManagedIdentity.CredentialID != "" {
+		t.Errorf("nested credential_id is server-computed and must stay empty on create")
+	}
+	assertExistTrue(t, projected.Exist)
+}
+
+func TestProjectExternalLocationUpdate(t *testing.T) {
+	current := ExternalLocationState{
+		Name:           "loc",
+		URL:            "abfss://c@a.dfs.core.windows.net/p",
+		CredentialName: "cred",
+		CredentialID:   "cred-id",
+		ReadOnly:       true,
+		Fallback:       true,
+	}
+
+	t.Run("bools are force-sent so desired false wins", func(t *testing.T) {
+		desired := ExternalLocationState{Name: "loc"}
+		projected := projectExternalLocationUpdate(&desired, &current)
+		if projected.ReadOnly || projected.Fallback {
+			t.Errorf("read_only/fallback must come from desired (force-sent): %+v", projected)
+		}
+		if projected.URL != current.URL || projected.CredentialID != "cred-id" {
+			t.Errorf("carry-over failed: %+v", projected)
+		}
+		assertExistTrue(t, projected.Exist)
+	})
+
+	t.Run("changing credential_name clears stale credential_id", func(t *testing.T) {
+		desired := ExternalLocationState{Name: "loc", CredentialName: "other-cred"}
+		projected := projectExternalLocationUpdate(&desired, &current)
+		if projected.CredentialName != "other-cred" || projected.CredentialID != "" {
+			t.Errorf("stale credential_id must clear on credential change: %+v", projected)
+		}
+	})
+}
+
+func TestProjectConnectionUpdate(t *testing.T) {
+	current := ConnectionState{
+		Name:           "conn",
+		ConnectionType: "HTTP",
+		Owner:          "a",
+		Options:        map[string]string{"host": "h1"},
+	}
+
+	t.Run("no options means no update at all", func(t *testing.T) {
+		desired := ConnectionState{Name: "conn", Owner: "b"}
+		projected := projectConnectionUpdate(&desired, &current)
+		if projected.Owner != "a" || projected.Options["host"] != "h1" {
+			t.Errorf("projection must match the no-op path: %+v", projected)
+		}
+		assertExistTrue(t, projected.Exist)
+	})
+
+	t.Run("options resend replaces the map and applies owner", func(t *testing.T) {
+		desired := ConnectionState{
+			Name:    "conn",
+			Owner:   "b",
+			Options: map[string]string{"host": "h2"},
+		}
+		projected := projectConnectionUpdate(&desired, &current)
+		if projected.Options["host"] != "h2" || projected.Owner != "b" {
+			t.Errorf("overlay failed: %+v", projected)
+		}
+		if projected.ConnectionType != "HTTP" {
+			t.Errorf("create-only connection_type must carry over")
+		}
+	})
+}

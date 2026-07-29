@@ -2,6 +2,7 @@ package resources
 
 import (
 	"context"
+	"strings"
 
 	dsc "github.com/LibreDsc/dsc-go-rdk"
 	"github.com/databricks/databricks-sdk-go/service/workspace"
@@ -38,6 +39,17 @@ func repoConfig() dsc.ResourceConfig {
 // equality, so no Testable is implemented — the DSC synthetic test suffices.
 type RepoHandler struct{}
 
+// repoAliasPath returns the other form of a workspace path: legacy /Repos/...
+// paths gain the canonical /Workspace prefix and vice versa. Both forms name
+// the same object, but not every workspace generation resolves both.
+func repoAliasPath(path string) string {
+	const workspacePrefix = "/Workspace"
+	if strings.HasPrefix(path, workspacePrefix+"/") {
+		return strings.TrimPrefix(path, workspacePrefix)
+	}
+	return workspacePrefix + path
+}
+
 func (h *RepoHandler) Get(ctx context.Context, in RepoState) (RepoState, error) {
 	if err := requireFields(field{"path", in.Path}); err != nil {
 		return in, err
@@ -50,7 +62,13 @@ func (h *RepoHandler) Get(ctx context.Context, in RepoState) (RepoState, error) 
 
 	logDebugf(MsgLookup, "Repo", "path="+in.Path)
 	obj, err := w.Workspace.GetStatusByPath(ctx, in.Path)
-	if err != nil || obj.ObjectType != workspace.ObjectTypeRepo {
+	if err != nil {
+		// Some workspace generations only resolve one of the two path
+		// aliases (/Repos/... vs /Workspace/Repos/...); try the other form
+		// before declaring the repo missing.
+		obj, err = w.Workspace.GetStatusByPath(ctx, repoAliasPath(in.Path))
+	}
+	if err != nil {
 		logInfof(MsgNotFound, "Repo", "path="+in.Path)
 		// Echo back the requested settings so the missing state is self-describing.
 		return dsc.NotFound(RepoState{
@@ -267,6 +285,12 @@ func (h *RepoHandler) Export(ctx context.Context, _ RepoState) ([]RepoState, err
 				state.Path = objects[i].Path
 				all = append(all, state)
 			case workspace.ObjectTypeDirectory:
+				if info, err := w.Repos.GetByRepoId(ctx, objects[i].ObjectId); err == nil {
+					state := repoResponseToState(info)
+					state.Path = objects[i].Path
+					all = append(all, state)
+					continue
+				}
 				if err := walk(objects[i].Path); err != nil {
 					return err
 				}

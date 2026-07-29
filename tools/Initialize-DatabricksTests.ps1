@@ -192,6 +192,51 @@ function New-TestSchemaName
     return "dsc_test_schema_$(Get-Random -Minimum 10000 -Maximum 99999)"
 }
 
+function New-TestVolumeName
+{
+    <#
+    .SYNOPSIS
+        Generates a unique name for a test Unity Catalog volume.
+    #>
+    return "dsc_test_volume_$(Get-Random -Minimum 10000 -Maximum 99999)"
+}
+
+function New-TestStorageCredentialName
+{
+    <#
+    .SYNOPSIS
+        Generates a unique name for a test Unity Catalog storage credential.
+    #>
+    return "dsc-test-storagecred-$(Get-Random -Minimum 10000 -Maximum 99999)"
+}
+
+function New-TestServiceCredentialName
+{
+    <#
+    .SYNOPSIS
+        Generates a unique name for a test Unity Catalog service credential.
+    #>
+    return "dsc-test-servicecred-$(Get-Random -Minimum 10000 -Maximum 99999)"
+}
+
+function New-TestExternalLocationName
+{
+    <#
+    .SYNOPSIS
+        Generates a unique name for a test Unity Catalog external location.
+    #>
+    return "dsc-test-extloc-$(Get-Random -Minimum 10000 -Maximum 99999)"
+}
+
+function New-TestConnectionName
+{
+    <#
+    .SYNOPSIS
+        Generates a unique name for a test Unity Catalog connection.
+    #>
+    return "dsc-test-connection-$(Get-Random -Minimum 10000 -Maximum 99999)"
+}
+
 function New-TestRepoPath
 {
     <#
@@ -273,6 +318,7 @@ function Test-UnityCatalogAvailable
     try
     {
         $summary = Invoke-DatabricksApi -Method GET -Path '/api/2.1/unity-catalog/metastore_summary'
+        $script:_metastoreSummary = $summary
         $script:_unityCatalogAvailable = [bool]$summary.metastore_id
     }
     catch
@@ -286,6 +332,136 @@ function Test-UnityCatalogAvailable
     }
 
     return $script:_unityCatalogAvailable
+}
+
+function Test-UnityCatalogManagedStorageAvailable
+{
+    <#
+    .SYNOPSIS
+        Checks whether Unity Catalog fixtures with managed storage can be
+        provisioned.
+    .DESCRIPTION
+        Managed catalogs (and therefore schemas and managed volumes) need a
+        storage root: either the metastore has default managed storage, or
+        DATABRICKS_CATALOG_STORAGE_LOCATION plus
+        DATABRICKS_ACCESS_CONNECTOR_ID are set so the storage fixture chain
+        (storage credential -> external location -> catalog storage_root)
+        can be provisioned. Discovery gate for the Schema, Volume, and Grant
+        suites.
+    #>
+    [CmdletBinding()]
+    param ()
+
+    if (-not (Test-UnityCatalogAvailable))
+    {
+        return $false
+    }
+
+    if ($script:_metastoreSummary -and $script:_metastoreSummary.storage_root)
+    {
+        return $true
+    }
+
+    if ($env:DATABRICKS_CATALOG_STORAGE_LOCATION -and $env:DATABRICKS_ACCESS_CONNECTOR_ID)
+    {
+        return $true
+    }
+
+    Write-Warning 'Metastore has no default managed storage and DATABRICKS_CATALOG_STORAGE_LOCATION/DATABRICKS_ACCESS_CONNECTOR_ID are not set. Skipping Unity Catalog managed storage tests.'
+    return $false
+}
+
+function Initialize-UnityCatalogStorage
+{
+    <#
+    .SYNOPSIS
+        Provisions the persistent Unity Catalog storage fixtures backing
+        catalog storage roots.
+    .DESCRIPTION
+        Idempotently creates a storage credential (dsc-ci-storage-credential,
+        backed by the access connector in DATABRICKS_ACCESS_CONNECTOR_ID) and
+        an external location (dsc-ci-managed-location, covering
+        DATABRICKS_CATALOG_STORAGE_LOCATION) via the Unity Catalog REST API.
+        Both are metastore-scoped and deliberately persistent: they survive
+        ephemeral CI workspaces and are never deleted by test suites.
+        Returns $true when the fixtures exist or were created.
+    #>
+    [CmdletBinding()]
+    param ()
+
+    if (-not ($env:DATABRICKS_CATALOG_STORAGE_LOCATION -and $env:DATABRICKS_ACCESS_CONNECTOR_ID))
+    {
+        return $false
+    }
+    if ($script:_ucStorageInitialized)
+    {
+        return $true
+    }
+
+    $credentialName = 'dsc-ci-storage-credential'
+    $locationName = 'dsc-ci-managed-location'
+
+    try
+    {
+        try
+        {
+            Invoke-DatabricksApi -Method GET -Path "/api/2.1/unity-catalog/storage-credentials/$credentialName" | Out-Null
+        }
+        catch
+        {
+            Invoke-DatabricksApi -Method POST -Path '/api/2.1/unity-catalog/storage-credentials' -Body @{
+                name                   = $credentialName
+                comment                = 'Persistent DSC CI fixture (do not delete)'
+                azure_managed_identity = @{ access_connector_id = $env:DATABRICKS_ACCESS_CONNECTOR_ID }
+                skip_validation        = $true
+            } | Out-Null
+        }
+
+        try
+        {
+            Invoke-DatabricksApi -Method GET -Path "/api/2.1/unity-catalog/external-locations/$locationName" | Out-Null
+        }
+        catch
+        {
+            Invoke-DatabricksApi -Method POST -Path '/api/2.1/unity-catalog/external-locations' -Body @{
+                name            = $locationName
+                url             = $env:DATABRICKS_CATALOG_STORAGE_LOCATION
+                credential_name = $credentialName
+                comment         = 'Persistent DSC CI fixture (do not delete)'
+                skip_validation = $true
+            } | Out-Null
+        }
+
+        $script:_ucStorageInitialized = $true
+        return $true
+    }
+    catch
+    {
+        Write-Warning "Failed to provision Unity Catalog storage fixtures: $_"
+        return $false
+    }
+}
+
+function Get-DatabricksCurrentUserName
+{
+    <#
+    .SYNOPSIS
+        Returns the user name (email) of the authenticated principal.
+    .DESCRIPTION
+        Queries the SCIM Me endpoint; works for both PAT and AAD-token
+        authentication. Used by the Grant suite as a principal that is
+        guaranteed to exist in the workspace.
+    #>
+    [CmdletBinding()]
+    param ()
+
+    if (-not $script:_currentUserName)
+    {
+        $me = Invoke-DatabricksApi -Method GET -Path '/api/2.0/preview/scim/v2/Me'
+        $script:_currentUserName = $me.userName
+    }
+
+    return $script:_currentUserName
 }
 
 function New-UnityCatalogTestEnvironment
@@ -326,6 +502,14 @@ function New-UnityCatalogTestEnvironment
     }
     if ($env:DATABRICKS_CATALOG_STORAGE_LOCATION)
     {
+        # A catalog storage_root must be covered by an external location;
+        # provision the persistent storage credential + external location
+        # fixtures first.
+        if (-not (Initialize-UnityCatalogStorage))
+        {
+            Write-Warning 'Unity Catalog storage fixtures unavailable; cannot provision a catalog with storage_root.'
+            return $null
+        }
         $catalogBody.storage_root = "$($env:DATABRICKS_CATALOG_STORAGE_LOCATION.TrimEnd('/'))/$catalogName"
     }
 

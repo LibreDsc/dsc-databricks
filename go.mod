@@ -4,7 +4,7 @@ go 1.26
 
 require (
 	github.com/LibreDsc/dsc-go-rdk v0.2.0
-	github.com/databricks/databricks-sdk-go v0.163.0
+	github.com/databricks/databricks-sdk-go v0.165.0
 	golang.org/x/text v0.34.0
 )
 
