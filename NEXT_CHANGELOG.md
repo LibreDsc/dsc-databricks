@@ -41,7 +41,6 @@
   treat existing repos as missing (breaking branch-only `set` runs with
   `missing required field(s): url, provider`) and export return nothing.
 
-
 ### Dependency Updates
 
 - Bumped `github.com/databricks/databricks-sdk-go` from v0.163.0 to
