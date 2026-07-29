@@ -28,6 +28,7 @@ var localizedMessages = map[string]string{
 	MsgAlreadyExists:           MsgAlreadyExists,
 	MsgPut:                     MsgPut,
 	MsgSkipping:                MsgSkipping,
+	MsgSettingUnset:            MsgSettingUnset,
 	MsgWhatIfCreate:            MsgWhatIfCreate,
 	MsgWhatIfUpdate:            MsgWhatIfUpdate,
 	MsgWhatIfPut:               MsgWhatIfPut,

@@ -52,9 +52,41 @@
   projections, localization, manifest/schema parity) and Pester `WhatIf`
   contexts in every suite via the new `Invoke-DscWhatIf` helper;
   SqlWarehousePermission is covered inline in the SqlWarehouse suite.
+- **For contributors: Unity Catalog test environment.** Groundwork for the
+  upcoming Unity Catalog object resources:
+  `tools/Initialize-DatabricksTests.ps1` gains `Test-UnityCatalogAvailable`
+  (metastore-attachment detection; UC suites skip on workspaces that are not
+  UC-enabled), `New-UnityCatalogTestEnvironment` /
+  `Remove-UnityCatalogTestEnvironment` (tear up / tear down a dedicated
+  catalog + schema fixture through the Unity Catalog REST API, with
+  force-delete cascade on teardown), a `New-TestSchemaName` generator, and an
+  `Invoke-DatabricksApi` REST helper. Set
+  `DATABRICKS_CATALOG_STORAGE_LOCATION` when the metastore has no default
+  managed storage; a per-catalog subdirectory is used so storage locations
+  never overlap.
+- **For contributors: serverless SQL warehouse fixture.** The SqlWarehouse
+  E2E suite now provisions a serverless PRO warehouse — it starts in
+  seconds and consumes no Azure VM quota. The previous classic warehouse
+  launches on a different VM family than the cluster suite's node type and
+  could spend the entire 20-minute wait in `Clusters are failing to
+  launch` when that family had no capacity or quota in the region.
+
+- **Cluster supports next-generation compute.** New optional properties
+  `kind` (enum `CLASSIC_PREVIEW`), `is_single_node` (only valid with
+  `kind = CLASSIC_PREVIEW`), and `azure_availability` (enum `SPOT_AZURE`,
+  `ON_DEMAND_AZURE`, `SPOT_WITH_FALLBACK_AZURE`).
 
 ### Bug Fixes
 
+- **WorkspaceSetting `get` no longer fails on never-written settings.** On a
+  fresh workspace, settings that have never been written (e.g.
+  `default_namespace`) return 404 from the settings API, which Get treated
+  as a fatal error (exit code 2). Get now reports such a setting at its
+  server-side default — `_exist: true` with an explicit empty `value` and no
+  `etag` — and Set tolerates the missing etag on its pre-read so the first
+  write goes through (updates already send `allow_missing`). As part of
+  this, `value` is now always present in Get output (empty string when
+  unset) instead of being omitted.
 - **Group `display_name` is no longer schema-required.** The handler always
   accepted either `id` or `display_name` to identify a group, but the schema
   marked `display_name` required, so the DSC engine rejected id-only input

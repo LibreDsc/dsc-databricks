@@ -78,6 +78,7 @@ if ($RunTests)
         $resourceGroup = Get-AzResourceGroup | Select-Object -First 1
         $databricksInstance = Get-AzDatabricksWorkspace -ResourceGroupName $resourceGroup.ResourceGroupName | Select-Object -First 1
 
+        $workspaceCreated = $false
         if (-not $databricksInstance) {
             $params = @{
                 Name = 'dbt-e2e-test-' + [Guid]::NewGuid().ToString().Substring(0, 3)
@@ -86,10 +87,27 @@ if ($RunTests)
                 Location = $resourceGroup.Location
             }
             $databricksInstance = New-AzDatabricksWorkspace @params
+            $workspaceCreated = $true
         }
 
         $env:DATABRICKS_HOST = "https://$($databricksInstance.Url)"
         $env:DATABRICKS_TOKEN = (Get-AzAccessToken -ResourceUrl '2ff814a6-3304-4ab8-85cb-cd0e6f879c1d').Token | ConvertFrom-SecureString -AsPlainText
+
+        if ($workspaceCreated) {
+            Write-Verbose -Message 'Waiting for the new workspace cluster service to become ready...'
+            $headers = @{ Authorization = "Bearer $env:DATABRICKS_TOKEN" }
+            $deadline = [DateTime]::UtcNow.AddMinutes(10)
+            do {
+                try {
+                    $versions = Invoke-RestMethod -Uri "$env:DATABRICKS_HOST/api/2.0/clusters/spark-versions" -Headers $headers
+                    if ($versions.versions.Count -gt 0) { break }
+                }
+                catch { }
+                Start-Sleep -Seconds 15
+            } while ([DateTime]::UtcNow -lt $deadline)
+            Write-Verbose -Message 'Cluster service responded; granting the workspace a warm-up period.'
+            Start-Sleep -Seconds 120
+        }
     }
 
     $env:DSC_RESOURCE_PATH = $outputPath

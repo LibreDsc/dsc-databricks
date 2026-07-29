@@ -87,6 +87,20 @@ func TestProjectClusterUpdate(t *testing.T) {
 			t.Errorf("NumWorkers must stay server-managed under autoscale")
 		}
 	})
+
+	t.Run("next-gen compute fields overlay when set", func(t *testing.T) {
+		desired := ClusterState{
+			ClusterID:         "id-1",
+			NumWorkers:        2,
+			Kind:              "CLASSIC_PREVIEW",
+			AzureAvailability: "SPOT_WITH_FALLBACK_AZURE",
+			IsSingleNode:      true,
+		}
+		projected := projectClusterUpdate(&desired, &current)
+		if projected.Kind != "CLASSIC_PREVIEW" || projected.AzureAvailability != "SPOT_WITH_FALLBACK_AZURE" || !projected.IsSingleNode {
+			t.Errorf("next-gen compute overlay failed: %+v", projected)
+		}
+	})
 }
 
 func TestProjectSqlWarehouseCreate(t *testing.T) {

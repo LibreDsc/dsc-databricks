@@ -592,6 +592,29 @@ Describe 'Resource' -Skip:(!$script:databricksAvailable) {
 (`New-TestScopeName`, `New-TestUserName`, `New-TestClusterName`, ...) — add
 one there when a new resource needs one.
 
+**Unity Catalog object suites** (Schema, Volume, Table, ...) share a
+provisioned parent fixture instead of assuming one exists. Gate discovery on
+`Test-UnityCatalogAvailable` (checks the workspace has a metastore attached
+— attaching one needs an account admin and is never automated; suites skip
+when it returns `$false`):
+
+```powershell
+BeforeDiscovery {
+    . (Join-Path (Split-Path $PSScriptRoot -Parent) 'tools' 'Initialize-DatabricksTests.ps1')
+    $script:databricksAvailable = Initialize-DatabricksTests -ExeName $ExeName
+    $script:unityCatalogAvailable = $script:databricksAvailable -and (Test-UnityCatalogAvailable)
+}
+```
+
+Then tear up/down the fixture catalog + schema via the raw REST API (never
+via the resources under test): `New-UnityCatalogTestEnvironment` in
+`BeforeAll` returns `@{ CatalogName; SchemaName; SchemaFullName }` (or
+`$null` — skip), and `Remove-UnityCatalogTestEnvironment` in `AfterAll`
+force-deletes the catalog, cascading over everything the suite created
+inside it. Managed data lands in the metastore's default managed storage;
+for metastores without one, set `DATABRICKS_CATALOG_STORAGE_LOCATION` and a
+per-catalog subdirectory is appended (managed locations must not overlap).
+
 **Context order per Describe:** Discovery (`dsc resource list`,
 capabilities incl. `setWhatIf`) → Schema Validation (`_exist` present,
 `default: true`) → Get (missing → `_exist=false`) → Set–Create →

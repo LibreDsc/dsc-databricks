@@ -65,13 +65,59 @@ func TestBuildCreateRequestAutoscale(t *testing.T) {
 	}
 }
 
+func TestBuildCreateRequestNextGenCompute(t *testing.T) {
+	input := &ClusterState{
+		ClusterName:       "test",
+		SparkVersion:      "19.x-scala2.13",
+		NodeTypeID:        "Standard_D4ds_v5",
+		Kind:              "CLASSIC_PREVIEW",
+		IsSingleNode:      true,
+		AzureAvailability: "SPOT_WITH_FALLBACK_AZURE",
+	}
+
+	req := buildCreateRequest(input)
+
+	if req.Kind != compute.Kind("CLASSIC_PREVIEW") {
+		t.Errorf("Kind = %q, want CLASSIC_PREVIEW", req.Kind)
+	}
+	if !req.IsSingleNode {
+		t.Error("IsSingleNode not mapped")
+	}
+	if req.AzureAttributes == nil {
+		t.Fatal("AzureAttributes is nil, want availability set")
+	}
+	if req.AzureAttributes.Availability != compute.AzureAvailability("SPOT_WITH_FALLBACK_AZURE") {
+		t.Errorf("Availability = %q, want SPOT_WITH_FALLBACK_AZURE", req.AzureAttributes.Availability)
+	}
+}
+
+func TestBuildCreateRequestOmitsUnsetNextGenCompute(t *testing.T) {
+	req := buildCreateRequest(&ClusterState{ClusterName: "test", SparkVersion: "15.4.x-scala2.12"})
+
+	if req.Kind != "" {
+		t.Errorf("Kind = %q, want empty when unset", req.Kind)
+	}
+	if req.AzureAttributes != nil {
+		t.Errorf("AzureAttributes = %+v, want nil when azure_availability unset", req.AzureAttributes)
+	}
+}
+
 func TestBuildEditRequestUsesEffectiveValues(t *testing.T) {
 	input := &ClusterState{
-		NodeTypeID: "Standard_D4ds_v5",
-		NumWorkers: 3,
+		NodeTypeID:        "Standard_D4ds_v5",
+		NumWorkers:        3,
+		Kind:              "CLASSIC_PREVIEW",
+		AzureAvailability: "ON_DEMAND_AZURE",
 	}
 
 	req := buildEditRequest("cluster-1", input, "existing-name", "14.3.x-scala2.12")
+
+	if req.Kind != compute.Kind("CLASSIC_PREVIEW") {
+		t.Errorf("Kind = %q, want CLASSIC_PREVIEW", req.Kind)
+	}
+	if req.AzureAttributes == nil || req.AzureAttributes.Availability != compute.AzureAvailability("ON_DEMAND_AZURE") {
+		t.Errorf("AzureAttributes = %+v, want ON_DEMAND_AZURE availability", req.AzureAttributes)
+	}
 
 	if req.ClusterId != "cluster-1" {
 		t.Errorf("ClusterId = %q, want cluster-1", req.ClusterId)
@@ -92,14 +138,24 @@ func TestBuildEditRequestUsesEffectiveValues(t *testing.T) {
 
 func TestClusterToState(t *testing.T) {
 	details := &compute.ClusterDetails{
-		ClusterId:    "abc",
-		ClusterName:  "test",
-		SparkVersion: "15.4.x-scala2.12",
-		State:        compute.StateRunning,
-		Autoscale:    &compute.AutoScale{MinWorkers: 2, MaxWorkers: 8},
+		ClusterId:       "abc",
+		ClusterName:     "test",
+		SparkVersion:    "15.4.x-scala2.12",
+		State:           compute.StateRunning,
+		Autoscale:       &compute.AutoScale{MinWorkers: 2, MaxWorkers: 8},
+		Kind:            compute.Kind("CLASSIC_PREVIEW"),
+		IsSingleNode:    true,
+		AzureAttributes: &compute.AzureAttributes{Availability: compute.AzureAvailability("SPOT_WITH_FALLBACK_AZURE")},
 	}
 
 	state := clusterToState(details)
+
+	if state.Kind != "CLASSIC_PREVIEW" || !state.IsSingleNode {
+		t.Errorf("next-gen compute fields not mapped: %+v", state)
+	}
+	if state.AzureAvailability != "SPOT_WITH_FALLBACK_AZURE" {
+		t.Errorf("AzureAvailability = %q, want SPOT_WITH_FALLBACK_AZURE", state.AzureAvailability)
+	}
 
 	if state.ClusterID != "abc" || state.ClusterName != "test" {
 		t.Errorf("identity fields not mapped: %+v", state)
