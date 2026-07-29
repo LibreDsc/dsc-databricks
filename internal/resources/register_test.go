@@ -18,6 +18,9 @@ var testableResources = []string{
 	"LibreDsc.Databricks/Group",
 	"LibreDsc.Databricks/ServicePrincipal",
 	"LibreDsc.Databricks/Catalog",
+	"LibreDsc.Databricks/StorageCredential",
+	"LibreDsc.Databricks/ServiceCredential",
+	"LibreDsc.Databricks/Grant",
 	"LibreDsc.Databricks/SecretScope",
 	"LibreDsc.Databricks/SecretAcl",
 }
@@ -30,6 +33,13 @@ var expectedRequired = map[string][]string{
 	"LibreDsc.Databricks/Group":                  {}, // id OR display_name identifies a group; neither is unconditionally required
 	"LibreDsc.Databricks/ServicePrincipal":       {"display_name"},
 	"LibreDsc.Databricks/Catalog":                {"name"},
+	"LibreDsc.Databricks/Schema":                 {"catalog_name", "name"},
+	"LibreDsc.Databricks/Volume":                 {"catalog_name", "name", "schema_name"},
+	"LibreDsc.Databricks/StorageCredential":      {"name"},
+	"LibreDsc.Databricks/ServiceCredential":      {"name"},
+	"LibreDsc.Databricks/ExternalLocation":       {"name"},
+	"LibreDsc.Databricks/Connection":             {"name"},
+	"LibreDsc.Databricks/Grant":                  {"full_name", "principal", "securable_type"},
 	"LibreDsc.Databricks/Cluster":                {},
 	"LibreDsc.Databricks/ClusterPolicy":          {},
 	"LibreDsc.Databricks/Repo":                   {"path"},

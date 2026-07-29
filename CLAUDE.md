@@ -42,8 +42,10 @@ build.ps1                       # Build + manifest generation into output/
 
 **Available resources** (all prefixed `LibreDsc.Databricks/`, PascalCase
 after the slash): User, AccountUser, Group, ServicePrincipal, Catalog,
-Cluster, ClusterPolicy, Repo, Secret, SecretScope, SecretAcl, SqlWarehouse,
-SqlWarehousePermission, WorkspaceConf, WorkspaceSetting.
+Schema, Volume, StorageCredential, ServiceCredential, ExternalLocation,
+Connection, Grant, Cluster, ClusterPolicy, Repo, Secret, SecretScope,
+SecretAcl, SqlWarehouse, SqlWarehousePermission, WorkspaceConf,
+WorkspaceSetting.
 
 ## Architecture
 
@@ -255,7 +257,10 @@ Implement `Testable` only when one of these applies:
   property comparison (health checks, expiry, etc.).
 
 Resources with a custom Test: User, AccountUser, Group, ServicePrincipal,
-Catalog, SecretScope, SecretAcl.
+Catalog, StorageCredential, ServiceCredential (both: server-computed nested
+`credential_id` and write-only `client_secret`/`skip_validation` need
+normalization before comparison), Grant (order-insensitive privilege set
+comparison), SecretScope, SecretAcl.
 
 **Canonical Test pattern:**
 
@@ -614,6 +619,28 @@ force-deletes the catalog, cascading over everything the suite created
 inside it. Managed data lands in the metastore's default managed storage;
 for metastores without one, set `DATABRICKS_CATALOG_STORAGE_LOCATION` and a
 per-catalog subdirectory is appended (managed locations must not overlap).
+
+**UC storage fixture chain.** Suites that need catalogs with managed
+storage (Schema, Volume, Grant) gate on
+`Test-UnityCatalogManagedStorageAvailable` instead: it passes when the
+metastore has default storage OR both `DATABRICKS_CATALOG_STORAGE_LOCATION`
+and `DATABRICKS_ACCESS_CONNECTOR_ID` are set, in which case
+`Initialize-UnityCatalogStorage` (called automatically by
+`New-UnityCatalogTestEnvironment`) idempotently provisions the persistent
+metastore-scoped fixtures `dsc-ci-storage-credential` +
+`dsc-ci-managed-location` — these survive ephemeral CI workspaces and are
+never deleted by suites. The chain: access connector (Azure, from
+build.ps1's bootstrap) → storage credential → external location → catalog
+`storage_root` → schema → managed volume. The StorageCredential and
+ServiceCredential suites gate on `DATABRICKS_ACCESS_CONNECTOR_ID`; the
+ExternalLocation suite additionally needs `DATABRICKS_EXTERNAL_LOCATION_URL`
+(a container NOT covered by any existing external location — UC rejects
+overlapping locations) and creates its own storage credential fixture via
+REST. The Grant suite uses `Get-DatabricksCurrentUserName` (SCIM `/Me`) as
+its principal. build.ps1's CI bootstrap provisions the storage account (two
+containers: `managed`, `external`), the access connector, and the role
+assignment, exporting all three env vars; killed runs may orphan uniquely
+named `dsc_test_*`/`dsc-test-*` objects in the metastore.
 
 **Context order per Describe:** Discovery (`dsc resource list`,
 capabilities incl. `setWhatIf`) → Schema Validation (`_exist` present,
