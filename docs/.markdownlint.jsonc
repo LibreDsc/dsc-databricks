@@ -1,0 +1,15 @@
+{
+  "extends": "../.markdownlint.jsonc",
+  // Material admonition and content-tab bodies are 4-space indented;
+  // CommonMark parses them as indented code blocks, which would trip the
+  // fenced-only rule. Fenced blocks remain the convention for real code.
+  "code-block-style": false,
+  // Keep the 80-column wrap for prose but allow unbreakable tokens such as
+  // long URLs in link reference definitions.
+  "line-length": {
+    "strict": false,
+    "code_blocks": false,
+    "tables": false,
+    "line_length": 80
+  }
+}

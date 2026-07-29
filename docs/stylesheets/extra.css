@@ -1,0 +1,23 @@
+/* Deep-teal "lakehouse" identity for dsc-databricks docs.
+   Palette: primary #0E7C86 / light #17A2AE / dark #085E66,
+   accent #00B8A9, slate link tint #4FD1DB. */
+
+:root > * {
+  /* Header, navigation highlights, primary buttons. */
+  --md-primary-fg-color: #0e7c86;
+  --md-primary-fg-color--light: #17a2ae;
+  --md-primary-fg-color--dark: #085e66;
+
+  /* Hover states, focus rings, active elements. */
+  --md-accent-fg-color: #00b8a9;
+  --md-accent-fg-color--transparent: rgba(0, 184, 169, 0.1);
+}
+
+/* Dark mode: with primary set to "custom" the theme applies no link-color
+   override, so a dark tint would produce low-contrast links on slate.
+   Lift links to a light teal and cool the surface hue toward teal. */
+[data-md-color-scheme="slate"] {
+  --md-typeset-a-color: #4fd1db;
+  --md-accent-fg-color: #35c8bb;
+  --md-hue: 195; /* Material default is 232 */
+}

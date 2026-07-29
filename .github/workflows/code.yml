@@ -8,6 +8,8 @@ on:
       - 'LICENSE'
       - '.github/*.md'
       - '.github/FUNDING.yml'
+      - 'docs/**'
+      - 'mkdocs.yml'
   pull_request:
     paths-ignore:
       - 'README.md'
@@ -15,6 +17,8 @@ on:
       - 'LICENSE'
       - '.github/*.md'
       - '.github/FUNDING.yml'
+      - 'docs/**'
+      - 'mkdocs.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}

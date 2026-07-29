@@ -28,7 +28,7 @@ This compiles the Go binary and generates the DSC resource manifest.
 ## Running tests
 
 Integration tests require Databricks authentication to be configured
-(see the [wiki][02] for details).
+(see [How to authenticate to Databricks][02] for details).
 
 ```powershell
 .\build.ps1 -RunTests
@@ -77,7 +77,7 @@ This project uses a changelog-driven release process inspired by the
 <!-- Link references -->
 [00]: https://go.dev/dl/
 [01]: https://github.com/PowerShell/PowerShell
-[02]: https://github.com/LibreDsc/dsc-databricks/wiki
+[02]: https://libredsc.github.io/dsc-databricks/how-to/authenticate/
 [03]: https://github.com/databricks/cli
 [04]: .github/copilot-instructions.md
 [05]: .github/instructions/dsc-databricks.instructions.md

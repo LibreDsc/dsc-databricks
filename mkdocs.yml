@@ -1,0 +1,100 @@
+site_name: dsc-databricks
+site_description: Microsoft DSC v3 resources for Databricks
+site_url: https://libredsc.github.io/dsc-databricks/
+repo_url: https://github.com/LibreDsc/dsc-databricks
+repo_name: LibreDsc/dsc-databricks
+edit_uri: edit/main/docs/
+
+copyright: >-
+  Documentation structured using the
+  <a href="https://diataxis.fr/">Di&aacute;taxis</a> framework.
+
+theme:
+  name: material
+  icon:
+    logo: material/database-check
+    repo: fontawesome/brands/github
+  palette:
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+  features:
+    - navigation.tabs
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+
+extra_css:
+  - stylesheets/extra.css
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+plugins:
+  - search
+
+nav:
+  - Home: index.md
+  - Tutorials:
+      - tutorials/index.md
+      - Get started: tutorials/get-started.md
+      - Manage secrets with a configuration: tutorials/manage-secrets-with-a-configuration.md
+  - How-to guides:
+      - how-to/index.md
+      - Authenticate to Databricks: how-to/authenticate.md
+      - Preview changes with what-if: how-to/preview-changes-with-what-if.md
+      - Export existing resources: how-to/export-resources.md
+  - Reference:
+      - reference/index.md
+      - Resources:
+          - Catalog: reference/resources/catalog.md
+          - Schema: reference/resources/schema.md
+          - Cluster: reference/resources/cluster.md
+          - Grant: reference/resources/grant.md
+          - StorageCredential: reference/resources/storage-credential.md
+          - SecretScope: reference/resources/secret-scope.md
+      - Command line: reference/cli.md
+      - Environment variables: reference/environment-variables.md
+      - Exit codes: reference/exit-codes.md
+  - Explanation:
+      - explanation/index.md
+      - About DSC v3 resources: explanation/about-dsc-v3-resources.md
+      - About what-if predictions: explanation/about-what-if-predictions.md
+      - About Unity Catalog dependencies: explanation/about-unity-catalog-dependencies.md
