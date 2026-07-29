@@ -18,6 +18,9 @@ output/
 # Dependency directories
 vendor/
 
+# MkDocs build output
+site/
+
 # Go workspace file
 go.work
 
