@@ -1,0 +1,656 @@
+/* Landing page styles for dsc-databricks.
+
+   Ported by hand from the parallax landing page of Material for MkDocs
+   (src/templates/assets/stylesheets/home/**, MIT, Martin Donath). That page
+   was authored in SCSS and removed upstream in 9.7.0; the rules below are the
+   plain-CSS equivalent with px2rem(N) resolved as N/20 rem, px2em(N) as
+   N/16 em, and the break-*-device() mixins expanded into media queries.
+
+   Loaded only on the home page, through overrides/home.html. */
+
+/* ------------------------------------------------------------------------ */
+/* Theme chrome                                                             */
+/* ------------------------------------------------------------------------ */
+
+/* The landing page renders its own content inside the hero block, so the
+   regular content column and both sidebars are dead weight. */
+.md-main__inner {
+  margin: 0;
+}
+
+.md-main__inner > .md-content,
+.md-main__inner > .md-sidebar--secondary {
+  display: none;
+}
+
+@media screen and (min-width: 60em) {
+  .md-sidebar--secondary {
+    display: none;
+  }
+}
+
+@media screen and (min-width: 76.25em) {
+  .md-sidebar--primary {
+    display: none;
+  }
+}
+
+/* The header floats transparently over the hero image and only gains a
+   background once the reader scrolls past the first group. home.js toggles
+   md-header--shadow. */
+.md-header:not(.md-header--shadow) {
+  background-color: transparent;
+  transition:
+    background-color 125ms,
+    transform 125ms cubic-bezier(0.1, 0.7, 0.1, 1),
+    box-shadow 0ms;
+}
+
+.md-header--shadow {
+  transition:
+    background-color 250ms,
+    transform 250ms cubic-bezier(0.1, 0.7, 0.1, 1),
+    box-shadow 250ms;
+}
+
+/* Tabs are rendered inside the hero, so they sit on top of the imagery. */
+[data-md-color-primary] .md-tabs {
+  position: absolute;
+  top: 2.4rem;
+  background-color: transparent;
+}
+
+.md-content__inner {
+  padding: 5.2rem 0;
+  margin-bottom: 0;
+}
+
+.md-content__inner::before {
+  display: none;
+}
+
+.md-content header {
+  display: block;
+  transition: opacity 750ms;
+}
+
+.js .md-content header[hidden] {
+  opacity: 0;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Typography                                                               */
+/* ------------------------------------------------------------------------ */
+
+.mdx-parallax .md-typeset {
+  color: var(--md-typeset-color);
+}
+
+.mdx-parallax .md-typeset h2 {
+  margin-top: 0.175em;
+  font-weight: 700;
+}
+
+.mdx-parallax .md-typeset h2 + h3 {
+  margin-top: -0.8em;
+  font-size: 1em;
+}
+
+.mdx-parallax .md-typeset :target {
+  --md-scroll-margin: 5.2rem;
+}
+
+/* Buttons follow the teal palette from extra.css rather than the hardcoded
+   pink of the upstream page. */
+.mdx-parallax .md-typeset .md-button {
+  margin-top: 0.5rem;
+  margin-right: 0.5rem;
+  color: var(--md-primary-bg-color);
+  background-color: var(--md-accent-fg-color);
+  border-width: 0;
+}
+
+.mdx-parallax .md-typeset .md-button--secondary {
+  background-color: transparent;
+  box-shadow: inset 0 0 0 0.05rem currentcolor;
+}
+
+.mdx-parallax .md-typeset .md-button:is(:focus, :hover) {
+  color: var(--md-primary-bg-color);
+  background-color: var(--md-primary-fg-color--light);
+}
+
+/* ------------------------------------------------------------------------ */
+/* Parallax                                                                 */
+/* ------------------------------------------------------------------------ */
+
+:root {
+  --md-parallax-perspective: 2.5rem;
+}
+
+.mdx-parallax {
+  width: 100vw;
+  height: 100vh;
+  margin-top: -2.4rem;
+  overflow: hidden auto;
+  overscroll-behavior-y: none;
+  perspective: var(--md-parallax-perspective);
+  scroll-behavior: smooth;
+}
+
+.mdx-parallax__group {
+  position: relative;
+  display: block;
+  color: var(--md-typeset-color);
+  background-color: var(--md-default-bg-color);
+  transform-style: preserve-3d;
+}
+
+/* The first group holds the hero and must be taller than the viewport so the
+   layers have somewhere to travel. */
+.mdx-parallax__group:first-child {
+  height: 140vh;
+  background-color: transparent;
+
+  /* Reduces GPU pressure by scoping layout/paint to this subtree. WebKit
+     miscalculates element size under `scale`, so Safari opts out below. */
+  contain: strict;
+}
+
+.safari .mdx-parallax__group:first-child {
+  contain: none;
+}
+
+.ff-hack .mdx-parallax__group:first-child {
+  contain: initial !important;
+}
+
+/* vw and vh cannot be divided in CSS, so the aspect ratio of the hero group
+   is stepped through media queries instead. */
+@media (min-width: 125vh) {
+  .mdx-parallax__group:first-child {
+    height: 120vw;
+  }
+}
+
+@media (min-width: 137.5vh) {
+  .mdx-parallax__group:first-child {
+    height: 125vw;
+  }
+}
+
+@media (min-width: 150vh) {
+  .mdx-parallax__group:first-child {
+    height: 130vw;
+  }
+}
+
+@media (min-width: 162.5vh) {
+  .mdx-parallax__group:first-child {
+    height: 135vw;
+  }
+}
+
+@media (min-width: 175vh) {
+  .mdx-parallax__group:first-child {
+    height: 140vw;
+  }
+}
+
+@media (min-width: 187.5vh) {
+  .mdx-parallax__group:first-child {
+    height: 145vw;
+  }
+}
+
+@media (min-width: 200vh) {
+  .mdx-parallax__group:first-child {
+    height: 150vw;
+  }
+}
+
+.mdx-parallax__group:last-child {
+  background-color: var(--md-default-bg-color);
+}
+
+/* Each layer is pushed back on the z axis in proportion to its depth and
+   scaled up to compensate for the perspective shrink. Deeper layers travel
+   less per scrolled pixel, which is the whole effect. */
+.mdx-parallax__layer {
+  position: absolute;
+  top: 0;
+  z-index: calc(10 - var(--md-parallax-depth, 0));
+  width: 100vw;
+  height: max(120vh, 100vw);
+  pointer-events: none;
+  transform:
+    translateZ(
+      calc(var(--md-parallax-perspective) * var(--md-parallax-depth) * -1)
+    )
+    scale(calc(var(--md-parallax-depth) + 1));
+  transform-origin: 50vw 50vh;
+}
+
+/* object-fit rather than srcset/sizes, so a single asset covers every
+   viewport shape. */
+.mdx-parallax__image {
+  position: absolute;
+  z-index: -1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: var(--md-image-position, 50%);
+}
+
+.mdx-parallax__blend {
+  top: initial;
+  bottom: 0;
+  height: min(100vh, 100vw);
+  background-image: linear-gradient(
+    to bottom,
+    transparent,
+    var(--md-default-bg-color)
+  );
+}
+
+/* ------------------------------------------------------------------------ */
+/* Hero                                                                     */
+/* ------------------------------------------------------------------------ */
+
+@keyframes mdx-bounce {
+  0% {
+    transform: translateY(0) translateZ(0);
+  }
+
+  50% {
+    transform: translateY(-16px) translateZ(0);
+  }
+}
+
+.mdx-hero {
+  display: block;
+  height: inherit;
+}
+
+.js .mdx-hero[hidden] > * {
+  opacity: 0;
+  transition: transform 0ms 100ms, opacity 100ms;
+  transform: translateY(16px);
+}
+
+/* Sticky plus a negative margin of the same height keeps the hero pinned for
+   one viewport without taking up flow. */
+.mdx-hero__scrollwrap {
+  position: sticky;
+  top: 0;
+  z-index: 9;
+  height: 100vh;
+  margin-bottom: -100vh;
+}
+
+.mdx-hero__inner {
+  position: absolute;
+  bottom: 3.2rem;
+  display: block;
+  width: 100%;
+  transition:
+    transform 400ms cubic-bezier(0.1, 0.7, 0.1, 1),
+    opacity 250ms;
+}
+
+@media screen and (max-width: 44.984375em) {
+  .mdx-hero__inner {
+    bottom: 6.4rem;
+  }
+}
+
+.mdx-hero__teaser {
+  max-width: 27rem;
+  margin: 0 0.8rem;
+  color: var(--md-primary-bg-color);
+
+  /* Promotes the teaser to its own layer, which stops it jittering while the
+     layers behind it move. */
+  backface-visibility: hidden;
+}
+
+.mdx-hero__teaser h1 {
+  margin-bottom: 0;
+  font-weight: 700;
+  color: inherit;
+}
+
+/* White text over photography needs a shadow to stay readable, but a shadow
+   on the buttons looks wrong. */
+.mdx-hero__teaser :not(.md-button) {
+  text-shadow: 0 0 0.2rem rgba(33, 29, 45, 0.8);
+}
+
+.mdx-hero__more {
+  position: absolute;
+  bottom: -2.4rem;
+  left: 50%;
+  display: block;
+  margin-left: -0.6rem;
+  text-align: center;
+  pointer-events: none;
+  animation: mdx-bounce 2000ms infinite cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.mdx-hero__more svg {
+  width: 1.2rem;
+  height: 1.2rem;
+  fill: rgb(255, 255, 255);
+}
+
+/* ------------------------------------------------------------------------ */
+/* Expect — the feature grid                                                */
+/* ------------------------------------------------------------------------ */
+
+.mdx-expect {
+  margin: 2.4rem 0;
+}
+
+.mdx-expect__list {
+  display: flex;
+  flex-flow: row wrap;
+  gap: 1.6rem;
+  padding: 0;
+  list-style: none;
+}
+
+.mdx-expect__item {
+  display: flex;
+  flex: 1 0 48%;
+  gap: 0.6rem;
+  margin: 0;
+  transition:
+    transform 750ms cubic-bezier(0.075, 0.85, 0.175, 1),
+    opacity 750ms;
+}
+
+.mdx-expect__item:nth-child(1) {
+  transition-delay: 200ms;
+}
+
+.mdx-expect__item:nth-child(2) {
+  transition-delay: 275ms;
+}
+
+.mdx-expect__item:nth-child(3) {
+  transition-delay: 350ms;
+}
+
+.mdx-expect__item:nth-child(4) {
+  transition-delay: 425ms;
+}
+
+.mdx-expect__item:nth-child(5) {
+  transition-delay: 500ms;
+}
+
+.mdx-expect__item:nth-child(6) {
+  transition-delay: 575ms;
+}
+
+.js .mdx-expect__item[hidden] {
+  opacity: 0;
+  transform: translate(-0.8rem, 0.4rem);
+}
+
+.js .mdx-expect__item[hidden]:nth-child(2n) {
+  transform: translate(0.8rem, 0.4rem);
+}
+
+.mdx-expect__icon {
+  flex-shrink: 0;
+  width: 2.2rem;
+  height: 2.2rem;
+  padding: 0.4rem;
+  background-color: var(--md-default-fg-color--lightest);
+  border-radius: 100%;
+  fill: currentcolor;
+}
+
+.mdx-expect__description > :last-child {
+  margin-bottom: 0;
+}
+
+@media screen and (max-width: 76.234375em) {
+  .mdx-expect__description > :last-child {
+    margin-left: -2.8rem;
+  }
+}
+
+/* ------------------------------------------------------------------------ */
+/* Spotlight                                                                */
+/* ------------------------------------------------------------------------ */
+
+.mdx-spotlight {
+  margin: 2em 0;
+}
+
+.mdx-spotlight__feature {
+  display: flex;
+  flex: 1 0 48%;
+  flex-flow: row nowrap;
+  gap: 3.2rem;
+  margin: 0 0 3.2rem;
+}
+
+@media screen and (max-width: 59.984375em) {
+  .mdx-spotlight__feature {
+    flex-direction: column;
+    gap: 0;
+  }
+}
+
+/* Alternate the side the terminal sits on. */
+@media screen and (min-width: 60em) {
+  .mdx-spotlight__feature:nth-child(2n + 1) {
+    flex-direction: row-reverse;
+  }
+}
+
+.mdx-spotlight__feature:last-child {
+  margin-bottom: 1em;
+}
+
+/* Upstream shows product screenshots here. This page shows real command
+   output instead, so the media slot is a terminal pane rather than an img. */
+.mdx-spotlight__terminal {
+  flex-shrink: 0;
+  width: 25rem;
+  max-width: 100%;
+  overflow-x: auto;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #1c2b30;
+  border-radius: 0.2rem;
+  box-shadow:
+    0 0.2rem 0.5rem rgba(0, 0, 0, 0.05),
+    0 0 0.05rem rgba(0, 0, 0, 0.1);
+  transition:
+    transform 750ms 125ms cubic-bezier(0.075, 0.85, 0.175, 1),
+    opacity 750ms 125ms;
+}
+
+@media screen and (max-width: 59.984375em) {
+  .mdx-spotlight__terminal {
+    margin-inline: auto;
+  }
+}
+
+.mdx-spotlight__terminal-title {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.6rem;
+  color: rgba(255, 255, 255, 0.55);
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+.mdx-spotlight__terminal-title::before {
+  flex-shrink: 0;
+  width: 0.4rem;
+  height: 0.4rem;
+  content: "";
+  background-color: var(--md-accent-fg-color);
+  border-radius: 100%;
+}
+
+.mdx-spotlight__terminal pre {
+  padding: 0.6rem;
+  margin: 0;
+  font-family: var(--md-code-font-family, monospace);
+  font-size: 0.6rem;
+  line-height: 1.5;
+  color: inherit;
+}
+
+.mdx-spotlight__feature figcaption {
+  margin-top: 0.8rem;
+  transition:
+    transform 750ms 125ms cubic-bezier(0.075, 0.85, 0.175, 1),
+    opacity 750ms 125ms;
+}
+
+.js .mdx-spotlight__feature[hidden] > .mdx-spotlight__terminal {
+  opacity: 0;
+  transform: translateY(1.6rem);
+}
+
+.js .mdx-spotlight__feature[hidden] > figcaption {
+  opacity: 0;
+  transform: translateX(1.6rem);
+}
+
+.js .mdx-spotlight__feature[hidden]:nth-child(2n) > figcaption {
+  transform: translateX(-1.6rem);
+}
+
+/* ------------------------------------------------------------------------ */
+/* Coverage band                                                            */
+/* ------------------------------------------------------------------------ */
+
+.mdx-trust {
+  display: block;
+  max-width: 40rem;
+  transition:
+    transform 750ms 125ms cubic-bezier(0.075, 0.85, 0.175, 1),
+    opacity 750ms 125ms;
+}
+
+.js .mdx-trust[hidden] {
+  opacity: 0;
+  transform: translateY(1.6rem);
+}
+
+.mdx-trust__list {
+  display: flex;
+  flex-flow: row wrap;
+  gap: 0.4rem;
+  padding: 0;
+  margin: 1.2rem 0;
+  list-style: none;
+}
+
+.mdx-trust__list li {
+  padding: 0.2rem 0.6rem;
+  margin: 0;
+  font-size: 0.7rem;
+  background-color: var(--md-default-fg-color--lightest);
+  border-radius: 1rem;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Connect                                                                  */
+/* ------------------------------------------------------------------------ */
+
+.mdx-content__column:last-child {
+  margin-top: 2.4rem;
+}
+
+.mdx-content__column p:last-child {
+  margin-bottom: 0;
+}
+
+@media screen and (min-width: 60em) {
+  .mdx-content__inner {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6.4rem;
+  }
+
+  .mdx-content__column {
+    margin-top: 0;
+  }
+
+  .mdx-content__column:first-child {
+    flex: 2 0;
+  }
+
+  .mdx-content__column:last-child {
+    flex: 1 0;
+    margin-top: 0;
+  }
+}
+
+.mdx-connect {
+  display: block;
+  transition:
+    transform 750ms 125ms cubic-bezier(0.075, 0.85, 0.175, 1),
+    opacity 750ms 125ms;
+}
+
+.js .mdx-connect[hidden] {
+  opacity: 0;
+  transform: translateY(1.6rem);
+}
+
+.mdx-connect .mdx-connect__link {
+  display: block;
+  color: var(--md-default-fg-color);
+}
+
+.mdx-connect .mdx-connect__link span {
+  margin-right: 0.2rem;
+}
+
+.mdx-connect .mdx-connect__link svg {
+  width: 0.9rem;
+  height: 0.9rem;
+  vertical-align: -0.125em;
+  fill: currentcolor;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Reduced motion                                                           */
+/* ------------------------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  .mdx-parallax {
+    scroll-behavior: auto;
+    perspective: none;
+  }
+
+  .mdx-parallax__layer {
+    transform: none;
+  }
+
+  .mdx-hero__more {
+    animation: none;
+  }
+
+  .js .mdx-hero[hidden] > *,
+  .js .mdx-expect__item[hidden],
+  .js .mdx-spotlight__feature[hidden] > .mdx-spotlight__terminal,
+  .js .mdx-spotlight__feature[hidden] > figcaption,
+  .js .mdx-trust[hidden],
+  .js .mdx-connect[hidden] {
+    opacity: 1;
+    transition: none;
+    transform: none;
+  }
+}

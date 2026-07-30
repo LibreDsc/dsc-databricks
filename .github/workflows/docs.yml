@@ -4,7 +4,11 @@ on:
       - main
     paths:
       - 'docs/**'
+      # The landing page template lives in the theme override directory.
+      - 'overrides/**'
       - 'mkdocs.yml'
+      # The changelog page includes CHANGELOG.md verbatim.
+      - 'CHANGELOG.md'
       - '.github/workflows/docs.yml'
 
 concurrency:
