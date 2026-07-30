@@ -39,16 +39,16 @@ The released binary is statically linked and therefore ships its
 dependencies inside the executable. The direct dependencies and their
 licenses:
 
-| Dependency | License |
-| ---------- | ------- |
+| Dependency                                      | License            |
+|-------------------------------------------------|--------------------|
 | [`github.com/databricks/databricks-sdk-go`][01] | Apache License 2.0 |
-| [`github.com/LibreDsc/dsc-go-rdk`][02] | MIT |
-| [`golang.org/x/text`][03] | BSD 3-Clause |
+| [`github.com/LibreDsc/dsc-go-rdk`][02]          | MIT                |
+| [`golang.org/x/text`][03]                       | BSD 3-Clause       |
 
 Each of those pulls in transitive dependencies of its own. The complete,
-version-pinned set is [`go.mod`][04]; run `go mod download` and inspect the
-module cache, or use a tool such as `go-licenses`, if you need a full
-attribution report for redistribution.
+version-pinned set lives in [`go.mod`][04]. If you need a full attribution
+report for redistribution, run `go mod download` and inspect the module
+cache, or generate one with a tool such as `go-licenses`.
 
 ## The documentation
 

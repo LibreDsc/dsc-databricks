@@ -45,11 +45,11 @@ the [resource reference][01] mark these properties.
 
 | Resource | Behavior |
 | -------- | -------- |
-| `Grant` | Bounded: exports grants on metastore-level securables only (catalogs, external locations, storage credentials, service credentials, connections). Schema, table, and volume grants are not exported. |
-| `Secret` | Secret values are write-only and are never exported. Re-supply `string_value` or `bytes_value` before applying. |
-| `StorageCredential`, `ServiceCredential` | The `client_secret` of a service principal block is write-only and is never exported. |
-| `Connection` | Secret option values, such as tokens, are returned redacted. |
-| `Volume`, `Schema` | Exported by walking the catalog hierarchy; catalogs the caller cannot enumerate are skipped. |
+| [`Grant`][03] | Bounded: exports grants on metastore-level securables only (catalogs, external locations, storage credentials, service credentials, connections). Schema, table, and volume grants are not exported. |
+| [`Secret`][04] | Secret values are write-only and are never exported. Re-supply `string_value` or `bytes_value` before applying. |
+| [`StorageCredential`][05], [`ServiceCredential`][06] | The `client_secret` of a service principal block is write-only and is never exported. |
+| [`Connection`][07] | Secret option values, such as tokens, are returned redacted. |
+| [`Volume`][08], [`Schema`][09] | Exported by walking the catalog hierarchy; catalogs the caller cannot enumerate are skipped. |
 
 ## Variations
 
@@ -67,3 +67,10 @@ dsc-databricks export --resource LibreDsc.Databricks/Cluster
 <!-- Link references -->
 [01]: ../reference/index.md
 [02]: ../reference/cli.md
+[03]: ../reference/resources/grant.md
+[04]: ../reference/resources/secret.md
+[05]: ../reference/resources/storage-credential.md
+[06]: ../reference/resources/service-credential.md
+[07]: ../reference/resources/connection.md
+[08]: ../reference/resources/volume.md
+[09]: ../reference/resources/schema.md

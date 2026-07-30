@@ -26,7 +26,7 @@ $env:DSC_RESOURCE_PATH = 'C:\dsc-resources\databricks'
 ```
 
 See [Installation][05] for the full walkthrough, and the
-[Get started tutorial][04] for how the CLI works.
+[Basic usage tutorial][04] for how the CLI works.
 
 ## Releases
 
@@ -55,5 +55,5 @@ The documentation can be found on the
 [01]: CONTRIBUTING.md
 [02]: CHANGELOG.md
 [03]: https://libredsc.github.io/dsc-databricks/
-[04]: https://libredsc.github.io/dsc-databricks/tutorials/get-started/
+[04]: https://libredsc.github.io/dsc-databricks/tutorials/basic-usage-dsc-databricks/
 [05]: https://libredsc.github.io/dsc-databricks/getting-started/

@@ -9,7 +9,7 @@ drift from the notes that ship with a release.
 Changes that are merged but not yet released are staged in
 [`NEXT_CHANGELOG.md`][01]. At release time the workflow folds that file into
 `CHANGELOG.md` under a dated heading and cuts the [GitHub release][02] from
-the same text — which is why `CHANGELOG.md` is never edited by hand.
+the same text (which is why `CHANGELOG.md` is never edited by hand).
 
 --8<-- "CHANGELOG.md"
 

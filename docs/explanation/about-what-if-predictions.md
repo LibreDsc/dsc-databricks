@@ -54,9 +54,9 @@ A prediction cannot know what only the server decides:
 ## Where to go next
 
 - [How to preview changes with what-if][01]
-- [About DSC v3 resources][02]
+- [About Microsoft DSC resources][02]
 
 <!-- Link references -->
 [00]: https://github.com/PowerShell/DSC/issues/1361
 [01]: ../how-to/preview-changes-with-what-if.md
-[02]: about-dsc-v3-resources.md
+[02]: about-microsoft-dsc-resources.md

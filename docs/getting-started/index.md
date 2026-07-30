@@ -1,14 +1,26 @@
 # Installation
 
-`dsc-databricks` is a single executable. Installing it means putting that
-executable somewhere, generating the resource manifests the DSC engine reads,
-and pointing the engine at them.
+`dsc-databricks` is a single executable. It implements the Microsoft DSC
+capabilities and follows the contract to talk against the engine.
 
-You also need the Microsoft DSC engine itself — `dsc-databricks` implements
-resources, not the engine that drives them. See
-[What the fork keeps and drops][05] for where that line sits.
+To install it, put that executable
+somewhere on your `PATH`, generate the resource manifests the DSC engine
+reads, and point the engine at them.
 
-## Step 1: Install the DSC engine
+Whilsts you can call the binary on its own: `get`, `set`, `test`, `delete` and
+`export` each act on one resource instance and print JSON, which suits
+scripting and debugging a single resource. The Microsoft DSC engine adds the
+declarative flavor on top. It reads a whole configuration document, orders
+the resources by their dependencies, decides per instance whether to create,
+update or delete, reports one diff for the run, and predicts all of it with
+what-if before you commit. Most of this documentation assumes you drive the
+resources that way.
+
+So install both. `dsc-databricks` implements resources, not the engine that
+drives them — see [What the fork keeps and drops][05] for where that line
+sits.
+
+## Step 1: Install the Microsoft DSC engine
 
 Install the engine, version 3.2 or later, with the `PSDSC` module:
 
@@ -27,17 +39,18 @@ dsc --version
 dsc 3.3.0-preview.4
 ```
 
-!!! note "Why 3.2 or later"
+!!! info "Why 3.2 or later"
 
-    What-if predictions are advertised through the `set` method's
+    Each manifest advertises what-if through the `set` method's
     `whatIfArg`. Engines older than 3.2 do not understand that manifest
     shape and will not offer `dsc config set -w`.
 
-## Step 2: Install dsc-databricks
+## Step 2: Install Databricks DSC CLI
 
-Windows users can install from winget; everyone else takes an archive from
-the [releases page][00], which publishes builds for Windows, Linux and macOS
-on both `amd64` and `arm64` alongside a `SHA256SUMS` file.
+`dsc-databricks` is a CLI utility available on Windows, Linux, and
+macOS on both `amd64` and `arm64`. Windows users can easily install
+it using `winget.exe`. For the other operationg systems, it can be taken
+from an archive from the [releases page][00].
 
 === "winget (Windows)"
 
@@ -62,9 +75,8 @@ on both `amd64` and `arm64` alongside a `SHA256SUMS` file.
 
 ## Step 3: Generate the resource manifests
 
-The engine does not discover resources from an executable on the `PATH`. It
-reads one manifest file per resource type, and `dsc-databricks` writes those
-itself:
+The engine discovers resources from manifest files, not from the executable.
+`dsc-databricks` writes those manifests itself, one per resource type:
 
 ```powershell
 dsc-databricks manifest --out-dir C:\dsc-resources\databricks
@@ -73,16 +85,24 @@ dsc-databricks manifest --out-dir C:\dsc-resources\databricks
 This produces one `libredsc.databricks.<name>.dsc.resource.json` file per
 resource type.
 
+Where you write them decides whether you need step 4. `dsc` searches every
+folder on your `PATH`, so manifests that land in a folder already on `PATH`
+— next to the executable, after a manual install — need no further
+configuration. Write them anywhere else and you point the engine at them
+yourself.
+
 !!! warning "winget installs still need this step"
 
-    A package-managed install puts the binary on your `PATH` but does not
-    place any manifests. Run `manifest --out-dir` once against a directory
-    of your choosing, then use that directory in step 4. Re-run it after
+    winget puts the binary on your `PATH` but places no manifests, and its
+    shim directory is not somewhere you want to write them. Pick a directory
+    of your own and follow step 4. Re-run `manifest --out-dir` after
     upgrading, so the manifests match the binary.
 
-## Step 4: Point the engine at the manifests
+## (Optional) Step 4: Point the engine at the manifests
 
-Set `DSC_RESOURCE_PATH` to the directory holding the manifests:
+Skip this step if step 3 wrote the manifests to a folder that is already on
+your `PATH`; the engine searches those folders on its own. Otherwise set
+`DSC_RESOURCE_PATH` to the directory holding the manifests:
 
 === "PowerShell"
 
@@ -96,9 +116,14 @@ Set `DSC_RESOURCE_PATH` to the directory holding the manifests:
     export DSC_RESOURCE_PATH=~/.local/share/dsc-resources/databricks
     ```
 
-Set it permanently — through your profile, your shell's rc file, or a
-machine-level environment variable — if you do not want to repeat it per
-session.
+Always make sure the above is set permanently if you use DSC's engine.
+
+!!! warning "`DSC_RESOURCE_PATH` replaces `PATH`"
+
+    Once you define it, the engine searches those folders *instead of*
+    `PATH`, not in addition to it. List every directory holding manifests
+    you want discovered, separated by `;` on Windows and `:` elsewhere, or
+    resources you previously relied on will disappear.
 
 ## Step 5: Verify
 
@@ -106,7 +131,7 @@ session.
 dsc resource list LibreDsc.Databricks/*
 ```
 
-All 22 resources should be listed:
+All resources should be listed:
 
 ```text
 Type                                    Kind      Version  Capabilities
@@ -117,8 +142,9 @@ LibreDsc.Databricks/Catalog             resource  0.1.0    gs-t-d---e---
 LibreDsc.Databricks/WorkspaceSetting    resource  0.1.0    gs---d---e---
 ```
 
-An empty list means the engine did not find the manifests — check
-`DSC_RESOURCE_PATH` and that step 3 actually wrote files there.
+An empty list means the engine did not find the manifests. Check that step 3
+actually wrote files, and that their directory is either on your `PATH` or
+listed in `DSC_RESOURCE_PATH`.
 
 ## Step 6: Authenticate
 
@@ -136,7 +162,7 @@ supported methods are covered in
 
 ## Next steps
 
-- [Get started with dsc-databricks][01] — a full create, read and delete
+- [Basic usage of dsc-databricks][01] — a full create, read and delete
   round trip.
 - [Why dsc-databricks is a trimmed Databricks CLI][04] — where the binary
   comes from and why it is shaped this way.
@@ -144,7 +170,7 @@ supported methods are covered in
 
 <!-- Link references -->
 [00]: https://github.com/LibreDsc/dsc-databricks/releases
-[01]: ../tutorials/get-started.md
+[01]: ../tutorials/basic-usage-dsc-databricks.md
 [02]: ../how-to/authenticate.md
 [03]: ../reference/index.md
 [04]: ../explanation/about-the-databricks-cli-fork.md

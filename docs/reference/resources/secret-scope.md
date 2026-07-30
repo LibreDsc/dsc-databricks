@@ -16,11 +16,11 @@ Type: `LibreDsc.Databricks/SecretScope`
 
 ## Properties
 
-| Name | Type | Required | Description |
-| ---- | ---- | -------- | ----------- |
-| `scope` | string | Yes | A unique name to identify the scope. |
-| `backend_type` | string | No | The backend type the scope was created with. Read-only. |
-| `_exist` | boolean | No | Whether the instance should exist. Default: `true`. |
+| Name           | Type    | Required | Description                                             |
+|----------------|---------|----------|---------------------------------------------------------|
+| `scope`        | string  | Yes      | A unique name to identify the scope.                    |
+| `backend_type` | string  | No       | The backend type the scope was created with. Read-only. |
+| `_exist`       | boolean | No       | Whether the instance should exist. Default: `true`.     |
 
 ## Capabilities
 
@@ -45,11 +45,15 @@ dsc resource set -r LibreDsc.Databricks/SecretScope --input '{"scope":"deploymen
 
 ## See also
 
-- [Get started with dsc-databricks][01]
+- [Secret][04]
+- [SecretAcl][05]
+- [Basic usage of dsc-databricks][01]
 - [Manage secrets with a DSC configuration document][02]
 - [Exit codes][03]
 
 <!-- Link references -->
-[01]: ../../tutorials/get-started.md
+[01]: ../../tutorials/basic-usage-dsc-databricks.md
 [02]: ../../tutorials/manage-secrets-with-a-configuration.md
 [03]: ../exit-codes.md
+[04]: secret.md
+[05]: secret-acl.md

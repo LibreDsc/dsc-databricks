@@ -83,7 +83,7 @@ nav:
       - Changelog: getting-started/changelog.md
       - Tutorials:
           - tutorials/index.md
-          - Get started: tutorials/get-started.md
+          - Basic usage: tutorials/basic-usage-dsc-databricks.md
           - Manage secrets with a configuration: tutorials/manage-secrets-with-a-configuration.md
       - How-to guides:
           - how-to/index.md
@@ -94,7 +94,7 @@ nav:
           - explanation/index.md
           - Why dsc-databricks is a trimmed CLI: explanation/about-the-databricks-cli-fork.md
           - What the fork keeps and drops: explanation/what-the-fork-keeps-and-drops.md
-          - About DSC v3 resources: explanation/about-dsc-v3-resources.md
+          - About Microsoft DSC resources: explanation/about-microsoft-dsc-resources.md
           - About what-if predictions: explanation/about-what-if-predictions.md
           - About Unity Catalog dependencies: explanation/about-unity-catalog-dependencies.md
   - Reference:
@@ -102,10 +102,26 @@ nav:
       - Resources:
           - Catalog: reference/resources/catalog.md
           - Schema: reference/resources/schema.md
-          - Cluster: reference/resources/cluster.md
-          - Grant: reference/resources/grant.md
+          - Volume: reference/resources/volume.md
           - StorageCredential: reference/resources/storage-credential.md
+          - ServiceCredential: reference/resources/service-credential.md
+          - ExternalLocation: reference/resources/external-location.md
+          - Connection: reference/resources/connection.md
+          - Grant: reference/resources/grant.md
+          - User: reference/resources/user.md
+          - AccountUser: reference/resources/account-user.md
+          - Group: reference/resources/group.md
+          - ServicePrincipal: reference/resources/service-principal.md
+          - Cluster: reference/resources/cluster.md
+          - ClusterPolicy: reference/resources/cluster-policy.md
+          - Repo: reference/resources/repo.md
+          - Secret: reference/resources/secret.md
           - SecretScope: reference/resources/secret-scope.md
+          - SecretAcl: reference/resources/secret-acl.md
+          - SqlWarehouse: reference/resources/sql-warehouse.md
+          - SqlWarehousePermission: reference/resources/sql-warehouse-permission.md
+          - WorkspaceConf: reference/resources/workspace-conf.md
+          - WorkspaceSetting: reference/resources/workspace-setting.md
       - Command line: reference/cli.md
       - Environment variables: reference/environment-variables.md
       - Exit codes: reference/exit-codes.md

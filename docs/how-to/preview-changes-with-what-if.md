@@ -3,7 +3,8 @@
 A what-if operation predicts the outcome of applying a configuration
 without changing anything in the workspace. Use it to review changes before
 they happen. What-if requires DSC v3.2 or later and is available on
-`dsc config set` only — there is no `dsc resource set --what-if`.
+`dsc config set` or `dsc resource set`. This guide usage
+`dsc config set`
 
 ## Run a what-if preview
 
