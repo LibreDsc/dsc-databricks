@@ -26,23 +26,23 @@ Type: `LibreDsc.Databricks/Catalog`
 
 ## Properties
 
-| Name | Type | Required | Description |
-| ---- | ---- | -------- | ----------- |
-| `name` | string | Yes | Name of the catalog. Unique identifier used for lookup. |
-| `comment` | string | No | User-provided free-form text description. |
-| `owner` | string | No | Username of the current owner of the catalog. |
-| `isolation_mode` | string | No | Workspace accessibility. Valid values: `ISOLATED`, `OPEN`. |
-| `storage_root` | string | No | Storage root URL for managed tables within the catalog. Cannot be changed after creation. |
-| `storage_location` | string | No | Storage location URL for managed tables. Read-only. |
-| `connection_name` | string | No | Name of the connection to an external data source. |
-| `provider_name` | string | No | Name of the delta sharing provider. |
-| `share_name` | string | No | Name of the share under the share provider. |
-| `enable_predictive_optimization` | string | No | Valid values: `DISABLE`, `ENABLE`, `INHERIT`. |
-| `catalog_type` | string | No | Type of the catalog. Read-only. |
-| `metastore_id` | string | No | Unique identifier of the parent metastore. Read-only. |
-| `properties` | object | No | Key-value properties attached to the catalog. |
-| `options` | object | No | Key-value options attached to the catalog. |
-| `_exist` | boolean | No | Whether the instance should exist. Default: `true`. |
+| Name                             | Type    | Required | Description                                                                               |
+|----------------------------------|---------|----------|-------------------------------------------------------------------------------------------|
+| `name`                           | string  | Yes      | Name of the catalog. Unique identifier used for lookup.                                   |
+| `comment`                        | string  | No       | User-provided free-form text description.                                                 |
+| `owner`                          | string  | No       | Username of the current owner of the catalog.                                             |
+| `isolation_mode`                 | string  | No       | Workspace accessibility. Valid values: `ISOLATED`, `OPEN`.                                |
+| `storage_root`                   | string  | No       | Storage root URL for managed tables within the catalog. Cannot be changed after creation. |
+| `storage_location`               | string  | No       | Storage location URL for managed tables. Read-only.                                       |
+| `connection_name`                | string  | No       | Name of the connection to an external data source.                                        |
+| `provider_name`                  | string  | No       | Name of the delta sharing provider.                                                       |
+| `share_name`                     | string  | No       | Name of the share under the share provider.                                               |
+| `enable_predictive_optimization` | string  | No       | Valid values: `DISABLE`, `ENABLE`, `INHERIT`.                                             |
+| `catalog_type`                   | string  | No       | Type of the catalog. Read-only.                                                           |
+| `metastore_id`                   | string  | No       | Unique identifier of the parent metastore. Read-only.                                     |
+| `properties`                     | object  | No       | Key-value properties attached to the catalog.                                             |
+| `options`                        | object  | No       | Key-value options attached to the catalog.                                                |
+| `_exist`                         | boolean | No       | Whether the instance should exist. Default: `true`.                                       |
 
 On a metastore without default managed storage, `storage_root` is required to
 create a catalog, and the URL must be covered by an existing external

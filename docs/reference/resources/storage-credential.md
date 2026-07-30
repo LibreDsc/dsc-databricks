@@ -33,35 +33,35 @@ Type: `LibreDsc.Databricks/StorageCredential`
 
 ## Properties
 
-| Name | Type | Required | Description |
-| ---- | ---- | -------- | ----------- |
-| `name` | string | Yes | Name of the storage credential. Unique among storage and service credentials within the metastore. |
-| `azure_managed_identity` | object | No | Azure managed identity configuration. See the table below. |
-| `azure_service_principal` | object | No | Azure service principal configuration. See the table below. |
-| `comment` | string | No | User-provided free-form text description. |
-| `owner` | string | No | Username of the current owner of the credential. |
-| `read_only` | boolean | No | Whether the credential is usable only for read operations. Always enforced: `false` is applied explicitly. |
-| `skip_validation` | boolean | No | Skip validation when creating or updating. Write-only behavior toggle. |
-| `isolation_mode` | string | No | Valid values: `ISOLATION_MODE_ISOLATED`, `ISOLATION_MODE_OPEN`. |
-| `id` | string | No | Unique identifier of the credential. Read-only. |
-| `metastore_id` | string | No | Unique identifier of the parent metastore. Read-only. |
-| `_exist` | boolean | No | Whether the instance should exist. Default: `true`. |
+| Name                      | Type    | Required | Description                                                                                                |
+|---------------------------|---------|----------|------------------------------------------------------------------------------------------------------------|
+| `name`                    | string  | Yes      | Name of the storage credential. Unique among storage and service credentials within the metastore.         |
+| `azure_managed_identity`  | object  | No       | Azure managed identity configuration. See the table below.                                                 |
+| `azure_service_principal` | object  | No       | Azure service principal configuration. See the table below.                                                |
+| `comment`                 | string  | No       | User-provided free-form text description.                                                                  |
+| `owner`                   | string  | No       | Username of the current owner of the credential.                                                           |
+| `read_only`               | boolean | No       | Whether the credential is usable only for read operations. Always enforced: `false` is applied explicitly. |
+| `skip_validation`         | boolean | No       | Skip validation when creating or updating. Write-only behavior toggle.                                     |
+| `isolation_mode`          | string  | No       | Valid values: `ISOLATION_MODE_ISOLATED`, `ISOLATION_MODE_OPEN`.                                            |
+| `id`                      | string  | No       | Unique identifier of the credential. Read-only.                                                            |
+| `metastore_id`            | string  | No       | Unique identifier of the parent metastore. Read-only.                                                      |
+| `_exist`                  | boolean | No       | Whether the instance should exist. Default: `true`.                                                        |
 
 ### azure_managed_identity
 
-| Name | Type | Required | Description |
-| ---- | ---- | -------- | ----------- |
-| `access_connector_id` | string | Yes | Azure resource ID of the Azure Databricks Access Connector. |
-| `managed_identity_id` | string | No | Azure resource ID of a user-assigned managed identity. Omit to use the connector's system-assigned identity. |
-| `credential_id` | string | No | Databricks internal ID of the credential. Read-only. |
+| Name                  | Type   | Required | Description                                                                                                  |
+|-----------------------|--------|----------|--------------------------------------------------------------------------------------------------------------|
+| `access_connector_id` | string | Yes      | Azure resource ID of the Azure Databricks Access Connector.                                                  |
+| `managed_identity_id` | string | No       | Azure resource ID of a user-assigned managed identity. Omit to use the connector's system-assigned identity. |
+| `credential_id`       | string | No       | Databricks internal ID of the credential. Read-only.                                                         |
 
 ### azure_service_principal
 
-| Name | Type | Required | Description |
-| ---- | ---- | -------- | ----------- |
-| `application_id` | string | Yes | Application (client) ID of the Microsoft Entra application. |
-| `directory_id` | string | Yes | Directory (tenant) ID of the Microsoft Entra application. |
-| `client_secret` | string | No | Client secret of the application. Write-only: the API never returns it, so drift on the secret cannot be detected. |
+| Name             | Type   | Required | Description                                                                                                        |
+|------------------|--------|----------|--------------------------------------------------------------------------------------------------------------------|
+| `application_id` | string | Yes      | Application (client) ID of the Microsoft Entra application.                                                        |
+| `directory_id`   | string | Yes      | Directory (tenant) ID of the Microsoft Entra application.                                                          |
+| `client_secret`  | string | No       | Client secret of the application. Write-only: the API never returns it, so drift on the secret cannot be detected. |
 
 ## Capabilities
 

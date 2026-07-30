@@ -21,13 +21,13 @@ Type: `LibreDsc.Databricks/Grant`
 
 ## Properties
 
-| Name | Type | Required | Description |
-| ---- | ---- | -------- | ----------- |
-| `securable_type` | string | Yes | Type of the securable, lowercase. Valid values: `catalog`, `clean_room`, `connection`, `credential`, `external_location`, `external_metadata`, `function`, `metastore`, `pipeline`, `provider`, `recipient`, `schema`, `share`, `staging_table`, `storage_credential`, `table`, `volume`. |
-| `full_name` | string | Yes | Full name of the securable, for example `main`, `main.default`, or `main.default.my_table`. |
-| `principal` | string | Yes | User email, group name, or service principal application ID. |
-| `privileges` | array of string | No | Privileges held directly on the securable, for example `USE_CATALOG`, `SELECT`, `ALL_PRIVILEGES`. Order-insensitive. Required for `set`. |
-| `_exist` | boolean | No | Whether the instance should exist. Default: `true`. |
+| Name             | Type            | Required | Description                                                                                                                                                                                                                                                                               |
+|------------------|-----------------|----------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `securable_type` | string          | Yes      | Type of the securable, lowercase. Valid values: `catalog`, `clean_room`, `connection`, `credential`, `external_location`, `external_metadata`, `function`, `metastore`, `pipeline`, `provider`, `recipient`, `schema`, `share`, `staging_table`, `storage_credential`, `table`, `volume`. |
+| `full_name`      | string          | Yes      | Full name of the securable, for example `main`, `main.default`, or `main.default.my_table`.                                                                                                                                                                                               |
+| `principal`      | string          | Yes      | User email, group name, or service principal application ID.                                                                                                                                                                                                                              |
+| `privileges`     | array of string | No       | Privileges held directly on the securable, for example `USE_CATALOG`, `SELECT`, `ALL_PRIVILEGES`. Order-insensitive. Required for `set`.                                                                                                                                                  |
+| `_exist`         | boolean         | No       | Whether the instance should exist. Default: `true`.                                                                                                                                                                                                                                       |
 
 `set` converges the principal's direct privilege set to exactly the listed
 privileges: missing privileges are granted and extra privileges are revoked

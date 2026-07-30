@@ -43,22 +43,32 @@ groups are all absent. The commands that exist are listed in the
 [command line reference][03] and there are seven of them.
 
 **Coverage of every API.** The official CLI aims to expose the whole
-platform. This binary exposes 22 resource types, chosen because they describe
+platform. This binary exposes resource types chosen because they describe
 durable configuration rather than transient activity — see
 [Resources][04]. A job *run* is an event, not a state, so it has no resource;
 a cluster policy is a state, so it does.
 
+**Signed Windows binaries.** Unlike everything else in this list, this one
+is not a deliberate simplification. The official CLI Authenticode-signs its
+`.exe` at release time, using jsign against an Azure Key Vault certificate.
+This project has no signing certificate, so its releases go out unsigned:
+the workflow builds, archives, and publishes a `SHA256SUMS` file, and that
+checksum is the only integrity evidence available to you. Expect Windows
+SmartScreen to warn on first run, and check the hash against the
+[releases page][08] before trusting a download. Neither project signs its
+macOS builds, so Gatekeeper behaves the same for both.
+
 ## Added
 
-**The DSC v3 protocol surface**, supplied by the [dsc-go-rdk][05] library:
-CLI dispatch, input parsing, output framing, JSON schema generation, manifest
-generation, exit codes and logging. Resource handlers implement
+**The Microsoft DSC protocol surface**, supplied by the [dsc-go-rdk][05]
+library: CLI dispatch, input parsing, output framing, JSON schema generation,
+manifest generation, exit codes and logging. Resource handlers implement
 `get`, `set`, `test`, `delete`, `export` and `setWhatIf`; the library turns
 those into a conforming command-line contract and a manifest per resource.
 
 **The `_exist` convention**, which makes absence part of state rather than a
 separate verb — the basis for one document both creating and removing
-things. [About DSC v3 resources and this module][06] covers it.
+things. [About Microsoft DSC resources and this module][06] covers it.
 
 **What-if prediction on every resource**, computed by the resource itself
 without calling any mutating API.
@@ -85,7 +95,7 @@ This is why installing `dsc-databricks` on its own is not enough, and why
 ## Where to go next
 
 - [Why dsc-databricks is a trimmed Databricks CLI][01]
-- [About DSC v3 resources and this module][06]
+- [About Microsoft DSC resources and this module][06]
 - [Resources][04]
 
 <!-- Link references -->
@@ -94,5 +104,6 @@ This is why installing `dsc-databricks` on its own is not enough, and why
 [03]: ../reference/cli.md
 [04]: ../reference/index.md
 [05]: https://github.com/LibreDsc/dsc-go-rdk
-[06]: about-dsc-v3-resources.md
+[06]: about-microsoft-dsc-resources.md
 [07]: ../getting-started/index.md
+[08]: https://github.com/LibreDsc/dsc-databricks/releases

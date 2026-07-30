@@ -87,8 +87,8 @@ the wrong workspace, and missing permissions for the operation.
 ## Related
 
 - [Environment variables][01]
-- [Get started with dsc-databricks][02]
+- [Basic usage of dsc-databricks][02]
 
 <!-- Link references -->
 [01]: ../reference/environment-variables.md
-[02]: ../tutorials/get-started.md
+[02]: ../tutorials/basic-usage-dsc-databricks.md
