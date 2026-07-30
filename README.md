@@ -7,9 +7,26 @@ Documentation is available on the [documentation site][03].
 
 ## Installation
 
-This CLI can be added downloaded as executable in any directory and added to
-the PATH environment variable. Check out the latest available releases and
-the [Get started tutorial][04] for more information how the CLI works.
+On Windows, install with winget:
+
+```powershell
+winget install --exact --id LibreDsc.DscDatabricks
+```
+
+On other platforms, download the archive for your platform from the
+[releases page][00], extract it, and add the directory to the PATH
+environment variable.
+
+Either way the DSC engine still needs the resource manifests, which the
+binary writes itself:
+
+```powershell
+dsc-databricks manifest --out-dir C:\dsc-resources\databricks
+$env:DSC_RESOURCE_PATH = 'C:\dsc-resources\databricks'
+```
+
+See [Installation][05] for the full walkthrough, and the
+[Get started tutorial][04] for how the CLI works.
 
 ## Releases
 
@@ -39,3 +56,4 @@ The documentation can be found on the
 [02]: CHANGELOG.md
 [03]: https://libredsc.github.io/dsc-databricks/
 [04]: https://libredsc.github.io/dsc-databricks/tutorials/get-started/
+[05]: https://libredsc.github.io/dsc-databricks/getting-started/

@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2400 2000"
+     preserveAspectRatio="xMidYMid slice" role="presentation">
+  <!-- Placeholder parallax layer 1 of 4: backdrop.
+       Replace with real artwork at the same filename; the markup in
+       overrides/home.html does not need to change. -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#04343a"/>
+      <stop offset="0.45" stop-color="#085e66"/>
+      <stop offset="1" stop-color="#0e7c86"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.72" cy="0.28" r="0.55">
+      <stop offset="0" stop-color="#00b8a9" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#00b8a9" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="2400" height="2000" fill="url(#sky)"/>
+  <rect width="2400" height="2000" fill="url(#glow)"/>
+
+  <!-- Sparse starfield, so the backdrop is not a flat wash. -->
+  <g fill="#e6fbfc" opacity="0.5">
+    <circle cx="180" cy="220" r="3"/>
+    <circle cx="430" cy="140" r="2"/>
+    <circle cx="700" cy="310" r="2.5"/>
+    <circle cx="960" cy="180" r="2"/>
+    <circle cx="1240" cy="260" r="3"/>
+    <circle cx="1520" cy="120" r="2"/>
+    <circle cx="1810" cy="300" r="2.5"/>
+    <circle cx="2080" cy="200" r="2"/>
+    <circle cx="2290" cy="380" r="3"/>
+    <circle cx="320" cy="520" r="2"/>
+    <circle cx="880" cy="600" r="2.5"/>
+    <circle cx="1660" cy="540" r="2"/>
+    <circle cx="2160" cy="640" r="2.5"/>
+  </g>
+</svg>

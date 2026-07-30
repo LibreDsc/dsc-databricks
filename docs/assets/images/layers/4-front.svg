@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2400 2000"
+     preserveAspectRatio="xMidYMid slice" role="presentation">
+  <!-- Placeholder parallax layer 4 of 4: foreground. This one sits closest to
+       the reader and travels furthest, so it is kept dark and low-detail. -->
+  <path fill="#021c20"
+        d="M0 1700 L200 1620 L420 1710 L640 1600 L880 1690 L1120 1590
+           L1360 1700 L1600 1610 L1840 1720 L2080 1620 L2400 1700
+           L2400 2000 L0 2000 Z"/>
+
+  <!-- Foreground grasses, mirroring the plant layers of the reference page. -->
+  <g fill="#021c20">
+    <path d="M120 1720 q30 -140 70 -190 q-10 120 -30 190 Z"/>
+    <path d="M300 1740 q40 -170 90 -230 q-16 150 -44 230 Z"/>
+    <path d="M910 1730 q-34 -150 -80 -205 q12 130 34 205 Z"/>
+    <path d="M1520 1740 q36 -160 84 -215 q-14 140 -40 215 Z"/>
+    <path d="M2210 1725 q-30 -145 -74 -196 q10 125 30 196 Z"/>
+  </g>
+</svg>

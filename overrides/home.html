@@ -1,0 +1,501 @@
+{#-
+  Landing page for dsc-databricks.
+
+  Structure follows the parallax landing page of the Material for MkDocs
+  website: a scroll container of full-bleed "groups", the first of which holds
+  layered images that travel at different rates. The motion is pure CSS
+  (docs/stylesheets/home.css); docs/javascripts/home.js only reveals sections
+  as they scroll in and gives the header a background past the hero.
+
+  All landing copy lives here rather than in docs/index.md, which is only
+  front matter selecting this template.
+-#}
+{% extends "base.html" %}
+
+{% block extrahead %}
+  {{ super() }}
+  <link rel="stylesheet" href="{{ 'stylesheets/home.css' | url }}">
+  {#- `contain: strict` on the hero group is a GPU optimisation WebKit gets
+      wrong, so Safari is tagged here and opts out in CSS. -#}
+  <script>
+    if (navigator.vendor === "Apple Computer, Inc.")
+      document.documentElement.classList.add("safari")
+  </script>
+{% endblock %}
+
+{#- Tabs are rendered inside the hero instead, so they float over the
+    imagery. -#}
+{% block tabs %}{% endblock %}
+
+{% block hero %}
+  <div class="mdx-parallax" data-mdx-component="parallax">
+
+    <!-- Hero -->
+    <section class="mdx-parallax__group" data-md-color-scheme="slate">
+      <img
+        class="mdx-parallax__layer mdx-parallax__image"
+        style="--md-parallax-depth: 8"
+        src="{{ 'assets/images/layers/1-sky.svg' | url }}" alt=""
+      >
+      <img
+        class="mdx-parallax__layer mdx-parallax__image"
+        style="--md-parallax-depth: 5; --md-image-position: 40%"
+        src="{{ 'assets/images/layers/2-ridge.svg' | url }}" alt=""
+      >
+      <img
+        class="mdx-parallax__layer mdx-parallax__image"
+        style="--md-parallax-depth: 2; --md-image-position: 45%"
+        src="{{ 'assets/images/layers/3-mid.svg' | url }}" alt=""
+      >
+      <img
+        class="mdx-parallax__layer mdx-parallax__image"
+        style="--md-parallax-depth: 1; --md-image-position: 50%"
+        src="{{ 'assets/images/layers/4-front.svg' | url }}" alt=""
+      >
+      <div class="mdx-parallax__layer mdx-parallax__blend"></div>
+
+      <div class="mdx-hero" data-mdx-component="hero" hidden>
+        <div class="mdx-hero__scrollwrap md-grid">
+          {% include "partials/tabs.html" %}
+          <div class="mdx-hero__inner">
+            <div class="mdx-hero__teaser md-typeset">
+              <h1>Your Databricks workspace, declared</h1>
+              <p>
+                One binary, 22 Microsoft DSC v3 resources. Describe the
+                workspace you want in JSON or YAML and let the engine
+                reconcile it — Unity Catalog, compute, identities, secrets
+                and settings alike.
+              </p>
+              <a
+                href="{{ 'getting-started/' | url }}"
+                class="md-button"
+              >
+                Get started
+              </a>
+              <a
+                href="#everything-you-would-expect"
+                class="md-button md-button--secondary"
+              >
+                Learn more
+              </a>
+            </div>
+            <a
+              href="#everything-you-would-expect"
+              class="mdx-hero__more"
+              aria-label="Skip to the feature overview"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                <path d="M11 4h2v12l5.5-5.5 1.42 1.42L12 19.84l-7.92-7.92L5.5
+                  10.5 11 16z"/>
+              </svg>
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Everything you would expect -->
+    <section class="mdx-parallax__group" data-md-color-scheme="slate">
+      <div class="md-content md-grid" data-md-component="content">
+        <div class="md-content__inner">
+          <header class="md-typeset" hidden>
+            <h1 id="everything-you-would-expect">
+              Everything you would expect
+            </h1>
+          </header>
+          <div class="mdx-expect">
+            <ul class="mdx-expect__list">
+              <li class="mdx-expect__item md-typeset" hidden>
+                <div class="mdx-expect__icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path d="M12 3C7.58 3 4 4.79 4 7s3.58 4 8 4 8-1.79
+                      8-4-3.58-4-8-4M4 9v3c0 2.21 3.58 4 8 4s8-1.79
+                      8-4V9c0 2.21-3.58 4-8 4s-8-1.79-8-4m0 5v3c0 2.21 3.58 4 8
+                      4s8-1.79 8-4v-3c0 2.21-3.58 4-8 4s-8-1.79-8-4"/>
+                  </svg>
+                </div>
+                <div class="mdx-expect__description">
+                  <h2>One binary, the whole workspace</h2>
+                  <p>
+                    A single executable registers 22 resource types covering
+                    Unity Catalog, clusters and policies, users, groups and
+                    service principals, secrets, SQL warehouses and workspace
+                    settings. Nothing else to install per resource.
+                  </p>
+                </div>
+              </li>
+              <li class="mdx-expect__item md-typeset" hidden>
+                <div class="mdx-expect__icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path d="M12 20c4.41 0 8-3.59
+                      8-8s-3.59-8-8-8-8 3.59-8 8 3.59 8 8 8m0-18c5.5 0 10 4.5
+                      10 10s-4.5 10-10 10S2 17.5 2 12 6.5 2 12 2m4.2
+                      5.8-6.09 8.4L6 12.09l1.41-1.41 2.5 2.5 4.87-6.72z"/>
+                  </svg>
+                </div>
+                <div class="mdx-expect__description">
+                  <h2>Declarative and idempotent</h2>
+                  <p>
+                    Describe the end state, not the steps. Applying the same
+                    configuration twice changes nothing the second time, and
+                    an instance marked <code>_exist: false</code> is removed
+                    — creation and deletion in one document.
+                  </p>
+                </div>
+              </li>
+              <li class="mdx-expect__item md-typeset" hidden>
+                <div class="mdx-expect__icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path d="M12 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0
+                      3-3 3 3 0 0 0-3-3m0 8a5 5 0 0 1-5-5 5 5 0 0 1 5-5 5 5 0
+                      0 1 5 5 5 5 0 0 1-5 5m0-12.5C7 4.5 2.73 7.61 1 12c1.73
+                      4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11
+                      -7.5"/>
+                  </svg>
+                </div>
+                <div class="mdx-expect__description">
+                  <h2>Preview before you apply</h2>
+                  <p>
+                    Every resource implements what-if. Add <code>-w</code> to
+                    <code>dsc config set</code> and you get the exact state
+                    the apply would produce, plus the list of properties that
+                    would change, without touching the workspace.
+                  </p>
+                </div>
+              </li>
+              <li class="mdx-expect__item md-typeset" hidden>
+                <div class="mdx-expect__icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2
+                      2h12a2 2 0 0 0 2-2V8zm4 18H6V4h7v5h5zM8
+                      15.5h2.5V18h1.5v-2.5H14.5V14H12v-2.5h-1.5V14H8z"/>
+                  </svg>
+                </div>
+                <div class="mdx-expect__description">
+                  <h2>Export what already exists</h2>
+                  <p>
+                    Point it at a workspace that was built by hand and get a
+                    configuration-shaped inventory back. Useful for auditing
+                    live state, and a head start on the document you actually
+                    want to keep in source control.
+                  </p>
+                </div>
+              </li>
+              <li class="mdx-expect__item md-typeset" hidden>
+                <div class="mdx-expect__icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path d="M12 17a2 2 0 0 0 2-2 2 2 0 0 0-2-2 2 2 0 0 0-2
+                      2 2 2 0 0 0 2 2m6-9a2 2 0 0 1 2 2v10a2 2 0 0 1-2
+                      2H6a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2h1V6a5 5 0 0 1 5-5 5 5
+                      0 0 1 5 5v2zm-6-5a3 3 0 0 0-3 3v2h6V6a3 3 0 0 0-3-3"/>
+                  </svg>
+                </div>
+                <div class="mdx-expect__description">
+                  <h2>Authentication that just works</h2>
+                  <p>
+                    Credentials come straight from the Databricks SDK for Go:
+                    environment variables, <code>.databrickscfg</code>
+                    profiles, Microsoft Entra service principals. No bespoke
+                    auth to configure, and no secrets in your documents.
+                  </p>
+                </div>
+              </li>
+              <li class="mdx-expect__item md-typeset" hidden>
+                <div class="mdx-expect__icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84
+                      9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36
+                      -1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07
+                      -.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83
+                      .09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92
+                      0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0
+                      .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33s1.71.11 2.5.33
+                      c1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65
+                      .71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31
+                      .69.92.69 1.85V21c0 .27.16.59.67.5A10 10 0 0 0 22 12
+                      A10 10 0 0 0 12 2"/>
+                  </svg>
+                </div>
+                <div class="mdx-expect__description">
+                  <h2>Open Source, MIT licensed</h2>
+                  <p>
+                    Sources, build and releases are public. Read the code,
+                    build it yourself, vendor it, fork it — the
+                    <a href="{{ 'getting-started/license/' | url }}">MIT
+                    license</a> asks only that the notice travels with it.
+                  </p>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- More than a set of commands -->
+    <section class="mdx-parallax__group" data-md-color-scheme="default">
+      <div class="md-content md-grid" data-md-component="content">
+        <div class="md-content__inner">
+          <header class="md-typeset" hidden>
+            <h1 id="more-than-a-set-of-commands">
+              More than a set of commands
+            </h1>
+          </header>
+          <div class="mdx-spotlight">
+
+            <figure class="mdx-spotlight__feature" hidden>
+              <div class="mdx-spotlight__terminal">
+                <div class="mdx-spotlight__terminal-title">
+                  dsc config set -f secrets.dsc.yaml
+                </div>
+<pre><code>$schema: https://aka.ms/dsc/schemas/v3/bundled/config/document.json
+resources:
+  - name: platform scope
+    type: LibreDsc.Databricks/SecretScope
+    properties:
+      scope: platform
+
+  - name: storage key
+    type: LibreDsc.Databricks/Secret
+    dependsOn:
+      - "[resourceId('LibreDsc.Databricks/SecretScope','platform scope')]"
+    properties:
+      scope: platform
+      key: storage-account-key
+      string_value: s3cr3t</code></pre>
+              </div>
+              <figcaption class="md-typeset">
+                <h2>Configuration documents, not scripts</h2>
+                <p>
+                  Declare a whole slice of the workspace in one document. The
+                  engine works out the order from <strong>dependsOn</strong>,
+                  applies each resource, and reports what changed — so the
+                  document, not a runbook, is the source of truth.
+                </p>
+                <p>
+                  Resources compose across boundaries: a storage credential
+                  backs an external location, which backs a catalog, which
+                  holds schemas and volumes.
+                </p>
+                <p>
+                  <a href="{{ 'tutorials/manage-secrets-with-a-configuration/' | url }}">
+                    Manage secrets with a configuration
+                  </a>
+                </p>
+              </figcaption>
+            </figure>
+
+            <figure class="mdx-spotlight__feature" hidden>
+              <div class="mdx-spotlight__terminal">
+                <div class="mdx-spotlight__terminal-title">
+                  dsc config set -w -f catalog.dsc.yaml
+                </div>
+<pre><code>metadata:
+  Microsoft.DSC:
+    executionType: whatIf
+results:
+- name: engineering catalog
+  result:
+    beforeState:
+      name: engineering
+      _exist: false
+    afterState:
+      name: engineering
+      comment: Engineering data
+      _exist: true
+    changedProperties:
+    - comment</code></pre>
+              </div>
+              <figcaption class="md-typeset">
+                <h2>What-if, on every resource</h2>
+                <p>
+                  <strong>executionType: whatIf</strong> is your proof that
+                  nothing moved. The prediction has the same shape as a real
+                  apply, so the diff you review is the diff you get.
+                </p>
+                <p>
+                  Predictions are computed by the resource itself, not guessed
+                  from the schema: server-computed values stay empty for
+                  instances that would be created, and read-only fields carry
+                  over for instances that would be updated.
+                </p>
+                <p>
+                  <a href="{{ 'how-to/preview-changes-with-what-if/' | url }}">
+                    Preview changes with what-if
+                  </a>
+                </p>
+              </figcaption>
+            </figure>
+
+            <figure class="mdx-spotlight__feature" hidden>
+              <div class="mdx-spotlight__terminal">
+                <div class="mdx-spotlight__terminal-title">
+                  dsc resource export -r LibreDsc.Databricks/Cluster
+                </div>
+<pre><code>resources:
+- name: LibreDsc.Databricks/Cluster-0
+  type: LibreDsc.Databricks/Cluster
+  properties:
+    cluster_id: 0729-101122-abcdefgh
+    cluster_name: etl-nightly
+    spark_version: 19.x-scala2.13
+    state: TERMINATED
+    _exist: true</code></pre>
+              </div>
+              <figcaption class="md-typeset">
+                <h2>Start from the workspace you have</h2>
+                <p>
+                  Most workspaces were not built declaratively. Export turns
+                  what is already there into resource states you can read,
+                  diff and commit — an inventory today, a configuration
+                  tomorrow.
+                </p>
+                <p>
+                  Read-only properties are included and clearly marked, so you
+                  know what to strip before replaying a document into another
+                  workspace.
+                </p>
+                <p>
+                  <a href="{{ 'how-to/export-resources/' | url }}">
+                    Export existing resources
+                  </a>
+                </p>
+              </figcaption>
+            </figure>
+
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Coverage -->
+    <section class="mdx-parallax__group" data-md-color-scheme="slate">
+      <div class="md-content md-grid" data-md-component="content">
+        <div class="md-content__inner">
+          <header class="md-typeset" hidden>
+            <h1 id="covers-the-whole-workspace">
+              Covers the whole workspace
+            </h1>
+          </header>
+          <div class="mdx-trust md-typeset" hidden>
+            <h3>
+              Governance, compute, identity and configuration are all one
+              document away. Twenty-two resource types, each with the same
+              contract — <strong>get, set, test, delete, export and
+              what-if</strong> — so a workspace behaves the same whichever
+              corner of it you are managing.
+            </h3>
+            <ul class="mdx-trust__list">
+              <li>Catalog</li>
+              <li>Schema</li>
+              <li>Volume</li>
+              <li>External location</li>
+              <li>Storage credential</li>
+              <li>Connection</li>
+              <li>Grant</li>
+              <li>Cluster</li>
+              <li>Cluster policy</li>
+              <li>SQL warehouse</li>
+              <li>User</li>
+              <li>Group</li>
+              <li>Service principal</li>
+              <li>Secret scope</li>
+              <li>Repo</li>
+              <li>Workspace setting</li>
+            </ul>
+            <p>
+              <a href="{{ 'reference/' | url }}" class="md-button">
+                Browse the resources
+              </a>
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Contribute and connect, plus the footer -->
+    <section class="mdx-parallax__group" data-md-color-scheme="default">
+      <div class="md-content md-grid" data-md-component="content">
+        <div class="md-content__inner mdx-content__inner">
+          <div class="mdx-content__column">
+            <header class="md-typeset" hidden>
+              <h1 id="contribute">Contribute</h1>
+            </header>
+            <div class="mdx-connect md-typeset" hidden>
+              <p>
+                dsc-databricks is built in the open under the
+                <a href="{{ 'getting-started/license/' | url }}">MIT
+                license</a>. Issues, resource requests and pull requests are
+                all welcome — adding a resource is a well-trodden path, and
+                the contributing guide walks through it.
+              </p>
+              <p>
+                <strong>Missing a resource you need? Open an issue.</strong>
+              </p>
+              <p>
+                <a
+                  href="{{ config.repo_url }}/blob/main/CONTRIBUTING.md"
+                  class="md-button"
+                >
+                  Contributing guide
+                </a>
+              </p>
+            </div>
+          </div>
+          <div class="mdx-content__column">
+            <header class="md-typeset" hidden>
+              <h1 id="keep-in-touch">Keep in touch</h1>
+            </header>
+            <div class="mdx-connect md-typeset" hidden>
+              <p>
+                <a href="{{ config.repo_url }}" class="mdx-connect__link">
+                  <span>
+                    {% include ".icons/fontawesome/brands/github.svg" %}
+                  </span>
+                  dsc-databricks on <strong>GitHub</strong>
+                </a>
+                <a
+                  href="{{ config.repo_url }}/releases"
+                  class="mdx-connect__link"
+                >
+                  <span>
+                    {% include ".icons/material/package-variant-closed.svg" %}
+                  </span>
+                  Download a <strong>release</strong>
+                </a>
+                <a
+                  href="{{ 'getting-started/changelog/' | url }}"
+                  class="mdx-connect__link"
+                >
+                  <span>
+                    {% include ".icons/material/history.svg" %}
+                  </span>
+                  Read the <strong>changelog</strong>
+                </a>
+                <a
+                  href="{{ config.repo_url }}/issues"
+                  class="mdx-connect__link"
+                >
+                  <span>
+                    {% include ".icons/material/bug-outline.svg" %}
+                  </span>
+                  Report an <strong>issue</strong>
+                </a>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% include "partials/footer.html" %}
+    </section>
+  </div>
+{% endblock %}
+
+{#- Content and footer are rendered inside the parallax above. -#}
+{% block content %}{% endblock %}
+{% block footer %}{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script src="{{ 'javascripts/home.js' | url }}"></script>
+{% endblock %}

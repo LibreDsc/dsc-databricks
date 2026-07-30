@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2400 2000"
+     preserveAspectRatio="xMidYMid slice" role="presentation">
+  <!-- Placeholder parallax layer 3 of 4: mid ground. -->
+  <defs>
+    <linearGradient id="mid" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#06424a"/>
+      <stop offset="1" stop-color="#043035"/>
+    </linearGradient>
+  </defs>
+
+  <path fill="url(#mid)"
+        d="M0 1440 L240 1300 L470 1420 L710 1250 L950 1400 L1190 1270
+           L1430 1430 L1670 1290 L1910 1410 L2150 1280 L2400 1390
+           L2400 2000 L0 2000 Z"/>
+
+  <!-- A few upright markers to break the ridge line. -->
+  <g fill="#043035">
+    <rect x="620" y="1140" width="16" height="180" rx="8"/>
+    <rect x="1345" y="1180" width="16" height="200" rx="8"/>
+    <rect x="1985" y="1160" width="16" height="170" rx="8"/>
+  </g>
+</svg>
