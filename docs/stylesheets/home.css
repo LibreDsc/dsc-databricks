@@ -552,19 +552,14 @@
   transform: translateY(1.6rem);
 }
 
-/* auto-fit rather than auto-fill, so the tiles stretch to fill the row
-   instead of leaving a gap at the end. */
+/* A plain grid container rather than a list: the tiles are navigation, and
+   the anchors are the grid items. auto-fit rather than auto-fill, so they
+   stretch to fill the row instead of leaving a gap at the end. */
 .mdx-trust__list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
   gap: 0.4rem;
-  padding: 0;
   margin: 1.2rem 0;
-  list-style: none;
-}
-
-.mdx-trust__list li {
-  margin: 0;
 }
 
 .mdx-trust .mdx-trust__link {
