@@ -4,6 +4,7 @@
   // CommonMark parses them as indented code blocks, which would trip the
   // fenced-only rule. Fenced blocks remain the convention for real code.
   "code-block-style": false,
+  "link-image-reference-definitions": false,
   // Keep the 80-column wrap for prose but allow unbreakable tokens such as
   // long URLs in link reference definitions.
   "line-length": {

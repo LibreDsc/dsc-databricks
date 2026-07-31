@@ -47,6 +47,7 @@ theme:
 
 extra_css:
   - stylesheets/extra.css
+  - stylesheets/faq.css
 
 markdown_extensions:
   - admonition
@@ -125,3 +126,4 @@ nav:
       - Command line: reference/cli.md
       - Environment variables: reference/environment-variables.md
       - Exit codes: reference/exit-codes.md
+  - FAQ: faq.md

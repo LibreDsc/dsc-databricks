@@ -1,0 +1,168 @@
+/* Accordion styling for the FAQ page.
+
+   The questions are authored as a custom `faq` admonition type, so
+   pymdownx.details renders each one as <details class="faq"> with the
+   question in <summary>. Material styles that as a coloured note block with
+   a thick left rule; the rules below turn it into a flat, rounded card that
+   reads as a list of questions rather than a stack of admonitions.
+
+   Every selector is scoped to `.faq`, so loading this globally leaves the
+   regular admonitions and collapsible blocks untouched. */
+
+:root {
+  /* mdi/help-circle-outline, the marker in front of every question. */
+  --md-admonition-icon--faq: url('data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M11 18h2v-2h-2v2M12 2A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2m0 18a8 8 0 0 1-8-8 8 8 0 0 1 8-8 8 8 0 0 1 8 8 8 8 0 0 1-8 8m0-14a4 4 0 0 0-4 4h2a2 2 0 0 1 2-2 2 2 0 0 1 2 2c0 2-3 1.75-3 5h2c0-2.25 3-2.5 3-5a4 4 0 0 0-4-4Z"/></svg>');
+
+  --faq-accent: #0e7c86;
+  --faq-border: rgba(14, 124, 134, 0.22);
+  --faq-border-hover: rgba(14, 124, 134, 0.55);
+  --faq-surface: rgba(14, 124, 134, 0.02);
+  --faq-summary-open: rgba(14, 124, 134, 0.07);
+  --faq-shadow: 0 0.1rem 0.5rem rgba(14, 124, 134, 0.14);
+}
+
+[data-md-color-scheme="slate"] {
+  --faq-accent: #35c8bb;
+  --faq-border: rgba(53, 200, 187, 0.24);
+  --faq-border-hover: rgba(53, 200, 187, 0.6);
+  --faq-surface: rgba(53, 200, 187, 0.03);
+  --faq-summary-open: rgba(53, 200, 187, 0.1);
+  --faq-shadow: 0 0.1rem 0.5rem rgba(0, 0, 0, 0.35);
+}
+
+/* ------------------------------------------------------------------------ */
+/* The card                                                                 */
+/* ------------------------------------------------------------------------ */
+
+.md-typeset details.faq {
+  padding: 0 0.9rem;
+  margin: 0.4rem 0;
+  font-size: 0.75rem;
+  background-color: var(--faq-surface);
+  border: 0.05rem solid var(--faq-border);
+  border-radius: 0.4rem;
+  box-shadow: none;
+  overflow: hidden;
+  transition:
+    border-color 125ms,
+    box-shadow 125ms;
+}
+
+.md-typeset details.faq:hover {
+  border-color: var(--faq-border-hover);
+}
+
+.md-typeset details.faq[open] {
+  border-color: var(--faq-border-hover);
+  box-shadow: var(--faq-shadow);
+}
+
+/* Material rings a focused block in its default admonition blue; keep the
+   ring but tint it to match the card. Declared after the [open] rule, which
+   it ties with on specificity. */
+.md-typeset details.faq:focus-within {
+  box-shadow: 0 0 0 0.15rem var(--faq-border-hover);
+}
+
+/* Consecutive questions read as one list, so collapse the gap between two
+   closed cards to a hairline. */
+.md-typeset details.faq + details.faq {
+  margin-top: 0.3rem;
+}
+
+/* ------------------------------------------------------------------------ */
+/* The question                                                             */
+/* ------------------------------------------------------------------------ */
+
+.md-typeset details.faq > summary {
+  margin: 0 -0.9rem;
+  padding: 0.65rem 2.2rem 0.65rem 2.5rem;
+  font-weight: 600;
+  line-height: 1.5;
+  background-color: transparent;
+  border: none;
+  border-radius: 0;
+  transition: background-color 125ms;
+}
+
+.md-typeset details.faq > summary:hover {
+  background-color: var(--faq-summary-open);
+}
+
+.md-typeset details.faq[open] > summary {
+  background-color: var(--faq-summary-open);
+}
+
+/* A question mark rather than the note icon, tinted with the theme accent.
+   Positioned with physical properties because that is what the theme's own
+   [dir=ltr] rules use; these docs ship in left-to-right languages only. */
+.md-typeset details.faq > summary::before {
+  top: 0.72rem;
+  left: 0.8rem;
+  width: 1.05rem;
+  height: 1.05rem;
+  background-color: var(--faq-accent);
+  -webkit-mask-image: var(--md-admonition-icon--faq);
+  mask-image: var(--md-admonition-icon--faq);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
+/* The chevron defaults to currentcolor and rotates on open; keep the
+   animation and only tint it and move it in from the edge. */
+.md-typeset details.faq > summary::after {
+  top: 0.72rem;
+  right: 0.7rem;
+  width: 1.05rem;
+  height: 1.05rem;
+  background-color: var(--faq-accent);
+}
+
+/* Focus lands on the summary when tabbing through the page; make that
+   visible without the browser default outline sitting inside the card. */
+.md-typeset details.faq > summary:focus-visible {
+  outline: 0.1rem solid var(--faq-accent);
+  outline-offset: -0.15rem;
+}
+
+/* ------------------------------------------------------------------------ */
+/* The answer                                                               */
+/* ------------------------------------------------------------------------ */
+
+.md-typeset details.faq > :not(summary) {
+  color: var(--md-default-fg-color--light);
+}
+
+.md-typeset details.faq > :not(summary):first-of-type {
+  margin-top: 0.6rem;
+}
+
+.md-typeset details.faq > :last-child {
+  margin-bottom: 0.7rem;
+}
+
+/* Code samples inside an answer sit on the tinted card, so lift them back
+   onto the page surface to keep the contrast the theme intends. */
+.md-typeset details.faq .highlight > pre > code,
+.md-typeset details.faq > pre > code {
+  background-color: var(--md-code-bg-color);
+}
+
+/* ------------------------------------------------------------------------ */
+/* Print                                                                    */
+/* ------------------------------------------------------------------------ */
+
+/* Shadows and the chevron carry no meaning on paper, and a closed question
+   prints as its heading only. */
+@media print {
+  .md-typeset details.faq,
+  .md-typeset details.faq[open] {
+    box-shadow: none;
+  }
+
+  .md-typeset details.faq > summary::after {
+    display: none;
+  }
+}
