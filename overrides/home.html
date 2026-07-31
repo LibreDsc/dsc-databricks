@@ -411,19 +411,17 @@ results:
               ("Workspace conf",         "workspace-conf",           "material/tune"),
               ("Workspace setting",      "workspace-setting",        "material/cog-outline"),
             ] %}
-            <ul class="mdx-trust__list">
+            <div class="mdx-trust__list">
               {% for label, page, icon in resources %}
-                <li>
-                  <a
-                    href="{{ ('reference/resources/' ~ page ~ '/') | url }}"
-                    class="mdx-trust__link"
-                  >
-                    {% include ".icons/" ~ icon ~ ".svg" %}
-                    {{ label }}
-                  </a>
-                </li>
+                <a
+                  href="{{ ('reference/resources/' ~ page ~ '/') | url }}"
+                  class="mdx-trust__link"
+                >
+                  {% include ".icons/" ~ icon ~ ".svg" %}
+                  {{ label }}
+                </a>
               {% endfor %}
-            </ul>
+            </div>
             <p>
               <a href="{{ 'reference/' | url }}" class="md-button">
                 Browse the resources
