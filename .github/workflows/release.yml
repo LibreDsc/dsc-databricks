@@ -124,3 +124,32 @@ jobs:
           name: ${{ steps.version.outputs.tag }}
           body_path: release_notes.md
           files: dist/*
+
+  winget:
+    needs: release
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: windows-latest
+    steps:
+      - name: Determine version
+        id: version
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Submit manifest to winget-pkgs
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          $base = "https://github.com/${{ github.repository }}/releases/download/v$env:VERSION"
+          $x64 = "$base/dsc_databricks_${env:VERSION}_windows_amd64.zip"
+          $arm64 = "$base/dsc_databricks_${env:VERSION}_windows_arm64.zip"
+
+          Invoke-WebRequest -Uri https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
+          .\wingetcreate.exe update LibreDsc.DscDatabricks `
+            --version $env:VERSION `
+            --urls "$x64|x64" "$arm64|arm64" `
+            --submit `
+            --token $env:WINGET_TOKEN
