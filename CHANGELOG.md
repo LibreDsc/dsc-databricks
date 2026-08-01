@@ -1,6 +1,15 @@
 <!-- markdownlint-disable MD012 -->
 # Version changelog
 
+## Release v0.6.0 (2026-08-01)
+
+### Notable Changes
+
+- The release workflow now automatically submits an updated winget manifest
+  (`LibreDsc.DscDatabricks`) to microsoft/winget-pkgs when a stable release
+  tag is published.
+
+
 ## Release v0.5.0 (2026-07-29)
 
 ### Notable Changes
