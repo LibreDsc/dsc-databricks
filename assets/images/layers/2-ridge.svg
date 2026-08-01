@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2400 2000"
+     preserveAspectRatio="xMidYMid slice" role="presentation">
+  <!-- Placeholder parallax layer 2 of 4: far ridge. Transparent above the
+       silhouette so the backdrop shows through. -->
+  <defs>
+    <linearGradient id="far" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0a5a63"/>
+      <stop offset="1" stop-color="#074850"/>
+    </linearGradient>
+  </defs>
+
+  <path fill="url(#far)" opacity="0.85"
+        d="M0 1180 L180 1060 L340 1140 L520 980 L700 1120 L880 1010
+           L1060 1150 L1240 1030 L1420 1170 L1600 1050 L1780 1160
+           L1960 1020 L2140 1140 L2290 1060 L2400 1130 L2400 2000
+           L0 2000 Z"/>
+</svg>
